@@ -1,6 +1,3 @@
-#ifdef _WIN32
-#else
-
 #include "mmsc/mms_resolve.h"
 #include "mmlib/mms_util.h"
 #include "gwlib/gwlib.h"
@@ -22,5 +19,3 @@ MmsResolverFuncStruct mms_resolvefuncs = {
      mms_resolve,
      mms_resolvermodule_fini
 };
-
-#endif

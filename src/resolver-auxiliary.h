@@ -1,29 +1,22 @@
-#include "utils/filereader/filereader.h"
-#include "utils/filewriter/FileWriter.h"
-#include "utils/filelist/FileList.h"
-#include "utils/config/Config.h"
-#include "utils/log/Log.h"
+#include "utils/log/log.h"
 
-
-#ifdef _DEBUG
-	extern CLog g_coLog;
-#	define ENTER_ROUT	g_coLog.WriteLog ("enter '%s'", __FUNCTION__)
-#	define LEAVE_ROUT(res_code)	g_coLog.WriteLog ("leave '%s'; result code: '%x'", __FUNCTION__, res_code)
-#else
-#	define ENTER_ROUT
-#	define LEAVE_ROUT(res_code)
-#endif
+#define ENTER_ROUT(__coLog__)			__coLog__.WriteLog ("enter '%s'", __FUNCTION__)
+#define LEAVE_ROUT(__coLog__,res_code)	__coLog__.WriteLog ("leave '%s'; result code: '%x'", __FUNCTION__, res_code)
+#define CHECKPOINT(__coLog__)			__coLog__.WriteLog ("check point: thread: %X; function: '%s'; line: '%u';", pthread_self (), __FUNCTION__, __LINE__)
 
 #include <string>
 #include <map>
 #include <set>
-#ifdef _WIN32
-#	include <Windows.h>
-#	include <io.h> /* access */
-#else
-#	include <semaphore.h>
-#	include <unistd.h> /* access */
-#endif
+#include <semaphore.h>
+#include <pthread.h>
+#include <unistd.h> /* access */
+
+/* информация о файле */
+struct SFileInfo {
+	std::string m_strTitle; 
+	std::string m_strDir;
+	size_t m_stFileSize;
+};
 
 /* структура для хранения конфигурации модуля */
 struct SResolverConf {
@@ -36,38 +29,33 @@ struct SResolverConf {
 	std::string m_strLocalDir;
 	std::string m_strLocalNumPlanFile;
 	std::string m_strLocalPortFile;
+	std::string m_strLocalFileList;
 	std::string m_strLogFileMask;
+	std::string m_strProxyHost;
+	std::string m_strProxyPort;
 	/* период обновления кэша в секундах. по умолчанию 3600 */
 	unsigned int m_uiUpdateInterval;
-#ifdef _WIN32
-	SFileInfo m_soCURLInfo;
-#endif
+	int m_iDebug;
 };
 
 /* структура для хранения данных модуля */
 struct SResolverData {
 	/* кэш */
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > *m_pmapResolverCache;
+	/* логгер */
+	CLog m_coLog;
 	/* конфигурация модуля */
 	SResolverConf m_soConf;
-#ifdef _WIN32
-	/* дескриптор семафора */
-	HANDLE m_hSem;
-	/* дескриптор потока обновления кэша */
-	HANDLE m_hThreadUpdateCache;
-	/* дескриптом семафора потока обновления кэша, выполняющего роль таймера */
-	HANDLE m_hSemTimer;
-#else
 	/* объект семафора */
-	sem_t m_tSem;
-	int m_iSemInitialized;
-	int m_iSemTimerInitialized;
+	sem_t m_tSemData;
+	int m_iSemDataInitialized;
 	/* идентификатор потока обновления кэша */
 	pthread_t m_tThreadUpdateCache;
 	/* дескриптом семафора потока обновления кэша, выполняющего роль таймера */
-	sem_t m_tSemTimer;
-#endif
+	pthread_mutex_t m_tThreadMutex;
+	int m_iMutexInitialized;
 	volatile int m_iContinueUpdate;
+	int m_iDebug;
 };
 
 /* получает имя актуального файла */
@@ -77,20 +65,20 @@ int GetLastFileName (
 	std::string &p_strFileName);
 /* загружает данные с удаленного сервера */
 int resolver_load_data (
-	SResolverConf &p_soConf,
+	SResolverData *p_psoResData,
 	int *p_piUpdated);
 /* загружает файл с удаленного сервера */
 int DownloadFile (
-	SResolverConf &p_soConf,
+	SResolverData *p_psoResData,
 	std::string &p_strDir,
 	std::string &p_strFileName);
 /* разбирает файл, содержащий план нумерации */
 int ParseNumberinPlanFile (
-	SResolverConf &p_soResConf,
+	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
 /* разбирает файл, содержащий план нумерации */
 int ParsePortFile (
-	SResolverConf &p_soResConf,
+	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
 /* проверяет не существует ли файл. если файл существует функция возвращает '0', в противном случае функция возвращает '-1' */
 int IsFileNotExists (
@@ -98,12 +86,14 @@ int IsFileNotExists (
 	std::string &p_strFileTitle);
 /* считывает из файла данные и помещает их в кэш */
 int resolver_cache (
-	SResolverConf &p_soResConf,
+	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
 /* обновляет кэш */
 int resolver_recreate_cache (SResolverData *p_psoResData);
 /* считывает данные из файла конфигурации модуля */
-int resolver_load_conf (const char *p_pszConfFileName, SResolverConf &p_soResConf);
+int resolver_apply_settings (
+	const char *p_pszSettings,
+	SResolverConf &p_soResConf);
 /* добавляет диапазон в кэш */
 int InsertRange (
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_pmapCache,

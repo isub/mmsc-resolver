@@ -1,6 +1,3 @@
-#ifdef _WIN32
-#else
-
 #include "resolver-operations.h"
 #include "mmsc/mmsc_cfg.h"
 
@@ -47,7 +44,7 @@ static Octstr *mms_resolve (
 	if (proxyrelays && gwlist_len (proxyrelays) > 0) {
 		for (j = 0, m = gwlist_len (proxyrelays); j < m; j++) {
 			MmsProxyRelay *mp = (MmsProxyRelay *) gwlist_get (proxyrelays, j);
-			if (octstr_compare (mp->name, postrOwner)) {
+			if (0 == octstr_compare (mp->name, postrOwner)) {
 				return (Octstr *) octstr_duplicate (mp->host);
 			}
 		}
@@ -55,5 +52,3 @@ static Octstr *mms_resolve (
 
 	return 0;
 }
-
-#endif
