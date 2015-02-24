@@ -34,13 +34,13 @@ int LoadFileList (
 
 	int iRetVal = 0;
 	int iFnRes;
-	CURL *pHandle = NULL;
+	CURL *pCurl = NULL;
 	FILE *psoFile = NULL;
 
 	do {
 		/* инициализация дескриптора */
-		pHandle = curl_easy_init ();
-		if (NULL == pHandle) {
+		pCurl = curl_easy_init ();
+		if (NULL == pCurl) {
 			iRetVal = CURLE_OUT_OF_MEMORY;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_init: out of memory", __FUNCTION__);
 			break;
@@ -61,7 +61,7 @@ int LoadFileList (
 			p_psoResData->m_coLog.WriteLog ("error: '%s': fopen: error code: '%d'", __FUNCTION__, iFnRes);
 			break;
 		}
-		iFnRes = curl_easy_setopt (pHandle, CURLOPT_WRITEDATA, (void *) psoFile);
+		iFnRes = curl_easy_setopt (pCurl, CURLOPT_WRITEDATA, (void *) psoFile);
 		if (CURLE_OK != iFnRes) {
 			iRetVal = iFnRes;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -69,7 +69,7 @@ int LoadFileList (
 		}
 
 		/* set an user name */
-		iFnRes = curl_easy_setopt (pHandle, CURLOPT_USERNAME , p_psoResData->m_soConf.m_strUserName.c_str ());
+		iFnRes = curl_easy_setopt (pCurl, CURLOPT_USERNAME , p_psoResData->m_soConf.m_strUserName.c_str ());
 		if (CURLE_OK != iFnRes) {
 			iRetVal = iFnRes;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -77,7 +77,7 @@ int LoadFileList (
 		}
 
 		/* set an password */
-		iFnRes = curl_easy_setopt (pHandle, CURLOPT_PASSWORD , p_psoResData->m_soConf.m_strUserPswd.c_str ());
+		iFnRes = curl_easy_setopt (pCurl, CURLOPT_PASSWORD , p_psoResData->m_soConf.m_strUserPswd.c_str ());
 		if (CURLE_OK != iFnRes) {
 			iRetVal = iFnRes;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -90,7 +90,7 @@ int LoadFileList (
 		if (p_strDir.length ()) {
 			strURL += p_strDir + "/";
 		}
-		iFnRes = curl_easy_setopt (pHandle, CURLOPT_URL, strURL.c_str ());
+		iFnRes = curl_easy_setopt (pCurl, CURLOPT_URL, strURL.c_str ());
 		if (CURLE_OK != iFnRes) {
 			iRetVal = iFnRes;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -99,13 +99,7 @@ int LoadFileList (
 
 		/* если задан proxy host */
 		if (p_psoResData->m_soConf.m_strProxyHost.length ()) {
-			iFnRes = curl_easy_setopt (pHandle, CURLOPT_PROXY, p_psoResData->m_soConf.m_strProxyHost.c_str ());
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-			iFnRes = curl_easy_setopt (pHandle, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+			iFnRes = curl_easy_setopt (pCurl, CURLOPT_PROXY, p_psoResData->m_soConf.m_strProxyHost.c_str ());
 			if (CURLE_OK != iFnRes) {
 				iRetVal = iFnRes;
 				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -116,7 +110,7 @@ int LoadFileList (
 		/* если задан proxy port */
 		if (p_psoResData->m_soConf.m_strProxyPort.length ()) {
 			long lPort = atol (p_psoResData->m_soConf.m_strProxyPort.c_str ());
-			iFnRes = curl_easy_setopt (pHandle, CURLOPT_PROXYPORT, lPort);
+			iFnRes = curl_easy_setopt (pCurl, CURLOPT_PROXYPORT, lPort);
 			if (CURLE_OK != iFnRes) {
 				iRetVal = iFnRes;
 				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
@@ -125,7 +119,7 @@ int LoadFileList (
 		}
 
 		/* perform request */
-		iFnRes = curl_easy_perform (pHandle);
+		iFnRes = curl_easy_perform (pCurl);
 		if (CURLE_OK != iFnRes) {
 			iRetVal = iFnRes;
 			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_perform: error code: '%d'", __FUNCTION__, iFnRes);
@@ -134,8 +128,8 @@ int LoadFileList (
 	} while (0);
 
 	/* освобождаем занятые ресурсы */
-	if (NULL != pHandle) {
-		curl_easy_cleanup (pHandle);
+	if (NULL != pCurl) {
+		curl_easy_cleanup (pCurl);
 	}
 	if (NULL != psoFile) {
 		fclose (psoFile);
@@ -452,12 +446,6 @@ int DownloadFile (
 		/* если задан proxy host */
 		if (p_psoResData->m_soConf.m_strProxyHost.length ()) {
 			iFnRes = curl_easy_setopt (pvCurl, CURLOPT_PROXY, p_psoResData->m_soConf.m_strProxyHost.c_str ());
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-			iFnRes = curl_easy_setopt (pvCurl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
 			if (CURLE_OK != iFnRes) {
 				iRetVal = iFnRes;
 				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
