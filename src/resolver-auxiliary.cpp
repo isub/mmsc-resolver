@@ -1,5 +1,6 @@
 #include "resolver-operations.h"
 #include "resolver-auxiliary.h"
+#include "utils/config/config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -750,83 +751,119 @@ int resolver_apply_settings (
 {
 	int iRetVal = 0;
 	int iFnRes;
+	CConfig coConf;
 	const char *pszParamName;
-	char *pszNextParam;
-	char *pszParamVal;
+	std::string strParamVal;
 	unsigned int uiParamMask = 0;
 
-	pszParamName = p_pszSettings;
+	do {
+		iFnRes = coConf.LoadConf(p_pszSettings, 0);
+		if (iFnRes) {
+			iRetVal = 0;
+			break;
+		}
 
-	while (pszParamName) {
-		/* запоминаем следующий параметр */
-		pszNextParam = (char *) strstr (pszParamName, ";");
-		if (pszNextParam) {
-			*pszNextParam = '\0';
-			++pszNextParam;
-		}
-		/* получаем указатель на значение параметра */
-		pszParamVal = (char *) strstr (pszParamName, "=");
-		if (! pszParamVal) {
-			goto mk_continue;
-		}
-		*pszParamVal = '\0';
-		++pszParamVal;
+		pszParamName = "numlex_host";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strHost = strParamVal;
+		uiParamMask |= 1;
 
-		/* приступаем к разбору параметра */
-		if (0 == strcmp ("numlex_host", pszParamName)) {
-			p_soResConf.m_strHost = pszParamVal;
-			uiParamMask |= 1;
-		} else if (0 == strcmp ("numlex_user_name", pszParamName)) {
-			p_soResConf.m_strUserName = pszParamVal;
-			uiParamMask |= 2;
-		} else  if (0 == strcmp ("numlex_user_pswd", pszParamName)) {
-			p_soResConf.m_strUserPswd = pszParamVal;
-			uiParamMask |= 4;
-		} else if (0 == strcmp ("numlex_proto_name", pszParamName)) {
-			p_soResConf.m_strProto = pszParamVal;
-			uiParamMask |= 8;
-		} else if (0 == strcmp ("numlex_numplan_dir", pszParamName)) {
-			p_soResConf.m_strNumPlanDir = pszParamVal;
-			uiParamMask |= 16;
-		} else if (0 == strcmp ("numlex_portnum_dir", pszParamName)) {
-			p_soResConf.m_strPortDir = pszParamVal;
-			uiParamMask |= 32;
-		} else if (0 == strcmp ("local_cache_dir", pszParamName)) {
-			p_soResConf.m_strLocalDir = pszParamVal;
-			uiParamMask |= 64;
-		} else if (0 == strcmp ("local_numplan_file", pszParamName)) {
-			p_soResConf.m_strLocalNumPlanFile = pszParamVal;
-			uiParamMask |= 128;
-		} else if (0 == strcmp ("local_portnum_file", pszParamName)) {
-			p_soResConf.m_strLocalPortFile = pszParamVal;
-			uiParamMask |= 256;
-		} else if (0 == strcmp ("local_file_list", pszParamName))  {
-			p_soResConf.m_strLocalFileList = pszParamVal;
-			uiParamMask |= 512;
-		} else if (0 == strcmp ("update_interval", pszParamName)) {
-			p_soResConf.m_uiUpdateInterval = atol (pszParamVal);
-			if (0 == p_soResConf.m_uiUpdateInterval) {
-				p_soResConf.m_uiUpdateInterval = 3600;
-			}
-			uiParamMask |= 1024;
-		} else if (0 == strcmp ("log_file_mask", pszParamName)) {
-			p_soResConf.m_strLogFileMask = pszParamVal;
-			uiParamMask |= 2048;
+		pszParamName = "numlex_user_name";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strUserName = strParamVal;
+		uiParamMask |= 2;
+
+		pszParamName = "numlex_user_pswd";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strUserPswd = strParamVal;
+		uiParamMask |= 4;
+
+		pszParamName = "numlex_proto_name";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strProto = strParamVal;
+		uiParamMask |= 8;
+
+		pszParamName = "numlex_numplan_dir";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strNumPlanDir = strParamVal;
+		uiParamMask |= 16;
+
+		pszParamName = "numlex_portnum_dir";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strPortDir = strParamVal;
+		uiParamMask |= 32;
+
+		pszParamName = "local_cache_dir";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strLocalDir = strParamVal;
+		uiParamMask |= 64;
+
+		pszParamName = "local_numplan_file";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strLocalNumPlanFile = strParamVal;
+		uiParamMask |= 128;
+
+		pszParamName = "local_portnum_file";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strLocalPortFile = strParamVal;
+		uiParamMask |= 256;
+
+		pszParamName = "local_file_list";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strLocalFileList = strParamVal;
+		uiParamMask |= 512;
+
+		pszParamName = "update_interval";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_uiUpdateInterval = atol (strParamVal.c_str());
+		if (0 == p_soResConf.m_uiUpdateInterval) {
+			p_soResConf.m_uiUpdateInterval = 3600;
 		}
+		uiParamMask |= 1024;
+
+		pszParamName = "log_file_mask";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (iFnRes)
+			break;
+		p_soResConf.m_strLogFileMask = strParamVal;
+		uiParamMask |= 2048;
+
 		/* далее разбираются опциональные параметры */
-		else if (0 == strcmp ("debug", pszParamName)) {
-			p_soResConf.m_iDebug = atol (pszParamVal);
-		} else if (0 == strcmp ("proxy_host", pszParamName)) {
-			p_soResConf.m_strProxyHost = pszParamVal;
-		} else if (0 == strcmp ("proxy_port", pszParamName)) {
-			p_soResConf.m_strProxyPort = pszParamVal;
-		}
-		/* завершили разбор параметра */
-
-mk_continue:
-		/* переходим к следующему параметру */
-		pszParamName = pszNextParam;
-	}
+		pszParamName = "debug";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (!iFnRes)
+			p_soResConf.m_iDebug = atol (strParamVal.c_str());
+		pszParamName = "proxy_host";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (!iFnRes)
+			p_soResConf.m_strProxyHost = strParamVal;
+		pszParamName = "proxy_port";
+		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
+		if (!iFnRes)
+			p_soResConf.m_strProxyPort = strParamVal;
+	} while (0);
 
 	/* проверяем, все ли нужные параметры мы получили */
 	if (! (uiParamMask & (unsigned int) (4096 - 1))) {

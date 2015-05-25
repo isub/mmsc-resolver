@@ -96,8 +96,6 @@ void * resolver_init (const char *p_pszConfFile)
 	do {
 		psoResData = new SResolverData;
 
-		CHECKPOINT (psoResData->m_coLog);
-
 		/* инициализация параметров */
 		psoResData->m_tThreadUpdateCache = (pthread_t) -1;
 		psoResData->m_pmapResolverCache = NULL;
@@ -113,7 +111,6 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		CHECKPOINT (psoResData->m_coLog);
 
 		psoResData->m_iDebug = psoResData->m_soConf.m_iDebug;
 
@@ -124,7 +121,8 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 
 		/* инициализируем мьютекс для ожидания потока обновления кэша */
 		iFnRes = pthread_mutex_init (&(psoResData->m_tThreadMutex), NULL);
@@ -133,12 +131,14 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 		psoResData->m_iMutexInitialized = 1;
 		/* запираем мьютекс потока обновления */
 		pthread_mutex_trylock (&(psoResData->m_tThreadMutex));
 
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 
 		/* инициализируем семафор кэша */
 		iFnRes = sem_init (&(psoResData->m_tSemData), 0, 256);
@@ -147,7 +147,8 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 		psoResData->m_iSemDataInitialized = 1;
 
 		/* инициализация объектов синхронизации openSSL */
@@ -159,7 +160,8 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData->m_coLog.WriteLog ("error: '%s': curl_global_init: error code: '%d'", __FUNCTION__, iFnRes);
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 
 		/* первоначальная загрузка данных */
 		/* выделяем память под кэш */
@@ -172,7 +174,8 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 		/* формируем кэш */
 		iFnRes = resolver_cache (psoResData, *(psoResData->m_pmapResolverCache));
 		if (iFnRes) {
@@ -180,7 +183,8 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		}
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 
 		/* запуск потока обновления кэша */
 		iFnRes = pthread_create (
@@ -193,8 +197,13 @@ void * resolver_init (const char *p_pszConfFile)
 			psoResData = NULL;
 			break;
 		} 
-		if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+		if (psoResData->m_iDebug)
+			CHECKPOINT (psoResData->m_coLog);
 	} while (0);
+
+	if (psoResData) {
+		psoResData->m_coLog.WriteLog ("%s: mms resovler module is initialized successfully", __FUNCTION__);
+	}
 
 	if (psoResData && psoResData->m_iDebug > 1) LEAVE_ROUT (psoResData->m_coLog, psoResData);
 
@@ -206,13 +215,16 @@ int resolver_fini (void *p_pPtr)
 	int iRetVal = 0;
 	SResolverData *psoResData = (SResolverData *) p_pPtr;
 
-	if (psoResData->m_iDebug > 1) ENTER_ROUT (psoResData->m_coLog);
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug > 1)
+		ENTER_ROUT (psoResData->m_coLog);
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* сообщаем потоку обновления кэша о необходимости завершения работы */
 	psoResData->m_iContinueUpdate = 0;
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* дожидаемся освобождения семафора данных всеми потоками */
 	int iFnRes;
@@ -227,21 +239,24 @@ int resolver_fini (void *p_pPtr)
 		}
 	}
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* отпускаем семафор ожидания потока */
 	if (psoResData->m_iMutexInitialized) {
 		pthread_mutex_unlock (&(psoResData->m_tThreadMutex));
 	}
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* дожидаемся завершения работы потока обновления кэша */
 	if ((pthread_t) -1 != psoResData->m_tThreadUpdateCache) {
 		pthread_join (psoResData->m_tThreadUpdateCache, NULL);
 	}
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* уничтожаем семафор потока обнавления */
 	if (psoResData->m_iMutexInitialized) {
@@ -252,7 +267,8 @@ int resolver_fini (void *p_pPtr)
 		psoResData->m_iMutexInitialized = 0;
 	}
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* сбрасываем все данные на диск */
 	psoResData->m_coLog.Flush ();
@@ -264,7 +280,8 @@ int resolver_fini (void *p_pPtr)
 		psoResData->m_pmapResolverCache = NULL;
 	}
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 
 	/* уничтожаем семафор данных */
 	if (psoResData->m_iSemDataInitialized) {
@@ -365,7 +382,8 @@ struct SOwnerData * resolver_resolve (
 		sem_post (&(psoResData->m_tSemData));
 	} while (0);
 
-	if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+	if (psoResData->m_iDebug)
+		CHECKPOINT (psoResData->m_coLog);
 	if (psoRetVal) {
 		psoResData->m_coLog.WriteLog ("'%s': owner: '%s'; region: '%u'; MNC: '%u';", p_pszPhoneNum, psoRetVal->m_mcOwner, psoRetVal->m_uiRegionCode, psoRetVal->m_uiMNC);
 	} else {
@@ -397,15 +415,18 @@ static void * resolver_update_cache (void *p_pParam)
 			/* вычисляем время таймаута семафора */
 			tMutexTime.tv_sec = tCurrentTime.tv_sec + psoResData->m_soConf.m_uiUpdateInterval;
 			tMutexTime.tv_nsec = tCurrentTime.tv_usec * 1000;
-			if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+			if (psoResData->m_iDebug)
+				CHECKPOINT (psoResData->m_coLog);
 			/* ожидаем освобождения семафора или истечения таймаута */
 			iFnRes = pthread_mutex_timedlock (&(psoResData->m_tThreadMutex), &tMutexTime);
-			if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+			if (psoResData->m_iDebug)
+				CHECKPOINT (psoResData->m_coLog);
 			/* если произошла ошибка */
 			if (iFnRes) {
 				/* из ошибок нас устроит только таймаут, остальные ошибки считаем фатальными */
 				if (ETIMEDOUT != iFnRes) {
-					if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+					if (psoResData->m_iDebug)
+						CHECKPOINT (psoResData->m_coLog);
 					/* завершаем цикл */
 					break;
 				}
@@ -413,32 +434,39 @@ static void * resolver_update_cache (void *p_pParam)
 
 			/* если сброшен флаг продолжения работы */
 			if (0 == psoResData->m_iContinueUpdate) {
-				if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 				/* завершаем цикл */
 				break;
 			} else {
-				if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 			}
 
 			/* загружаем данные с удаленного сервера */
 			iFnRes = resolver_load_data (psoResData, &iDataUpdated);
 			if (iFnRes) {
-				if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 				continue;
 			} else {
-				if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 			}
 			/* если данные обновились */
 			if (iDataUpdated) {
-				if (psoResData->m_iDebug) CHECKPOINT (psoResData->m_coLog);
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 				resolver_recreate_cache (psoResData);
 			} else {
-				if (psoResData->m_iDebug) { CHECKPOINT (psoResData->m_coLog); }
+				if (psoResData->m_iDebug)
+					CHECKPOINT (psoResData->m_coLog);
 			}
 		}
 	} while (0);
 
-	if (psoResData->m_iDebug > 1) LEAVE_ROUT (psoResData->m_coLog, iFnRes);
+	if (psoResData->m_iDebug > 1)
+		LEAVE_ROUT (psoResData->m_coLog, iFnRes);
 
 	pthread_exit (0);
 }
