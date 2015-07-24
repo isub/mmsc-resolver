@@ -1,8 +1,8 @@
-#include "utils/log/log.h"
+#ifndef _RESOLVER_AUXILIARY_H_
+#define _RESOLVER_AUXILIARY_H_
 
-#define ENTER_ROUT(__coLog__)			__coLog__.WriteLog ("enter '%s'", __FUNCTION__)
-#define LEAVE_ROUT(__coLog__,res_code)	__coLog__.WriteLog ("leave '%s'; result code: '%x'", __FUNCTION__, res_code)
-#define CHECKPOINT(__coLog__)			__coLog__.WriteLog ("check point: thread: %X; function: '%s'; line: '%u';", pthread_self (), __FUNCTION__, __LINE__)
+#include "utils/log/log.h"
+#include "resolver-operations.h"
 
 #include <string>
 #include <map>
@@ -10,6 +10,13 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <unistd.h> /* access */
+
+#define SEM_NAME "/mmsc-resolver.update.locer"
+
+/* процедура инициализации объектов синхронизации openSSL */
+void init_locks (void);
+/* процедура освобождения ресурсов объектов синхронизации openSSL */
+void kill_locks (void);
 
 /* информация о файле */
 struct SFileInfo {
@@ -35,7 +42,6 @@ struct SResolverConf {
 	std::string m_strProxyPort;
 	/* период обновления кэша в секундах. по умолчанию 3600 */
 	unsigned int m_uiUpdateInterval;
-	int m_iDebug;
 };
 
 /* структура для хранения данных модуля */
@@ -47,7 +53,7 @@ struct SResolverData {
 	/* конфигурация модуля */
 	SResolverConf m_soConf;
 	/* объект семафора */
-	sem_t m_tSemData;
+	sem_t *m_ptSemData;
 	int m_iSemDataInitialized;
 	/* идентификатор потока обновления кэша */
 	pthread_t m_tThreadUpdateCache;
@@ -55,23 +61,8 @@ struct SResolverData {
 	pthread_mutex_t m_tThreadMutex;
 	int m_iMutexInitialized;
 	volatile int m_iContinueUpdate;
-	int m_iDebug;
 };
 
-/* получает имя актуального файла */
-int GetLastFileName (
-	SResolverConf &p_soConf,
-	std::string &p_strDir,
-	std::string &p_strFileName);
-/* загружает данные с удаленного сервера */
-int resolver_load_data (
-	SResolverData *p_psoResData,
-	int *p_piUpdated);
-/* загружает файл с удаленного сервера */
-int DownloadFile (
-	SResolverData *p_psoResData,
-	std::string &p_strDir,
-	std::string &p_strFileName);
 /* разбирает файл, содержащий план нумерации */
 int ParseNumberinPlanFile (
 	SResolverData *p_psoResData,
@@ -80,10 +71,6 @@ int ParseNumberinPlanFile (
 int ParsePortFile (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
-/* проверяет не существует ли файл. если файл существует функция возвращает '0', в противном случае функция возвращает '-1' */
-int IsFileNotExists (
-	std::string &p_strDir,
-	std::string &p_strFileTitle);
 /* считывает из файла данные и помещает их в кэш */
 int resolver_cache (
 	SResolverData *p_psoResData,
@@ -107,8 +94,5 @@ int InsertRangeDEF (
 	unsigned int p_uiToDEF,
 	unsigned int p_uiToGHIJ,
 	SOwnerData &p_soResData);
-/* декомпрессия исходных данных */
-int ExtractZipFile (
-	SFileInfo &p_soUnZip,
-	SFileInfo &p_soZipFile,
-	SFileInfo &p_soOutput);
+
+#endif /* _RESOLVER_AUXILIARY_H_ */

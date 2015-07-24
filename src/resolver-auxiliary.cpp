@@ -1,4 +1,3 @@
-#include "resolver-operations.h"
 #include "resolver-auxiliary.h"
 #include "utils/config/config.h"
 
@@ -16,6 +15,73 @@
 #	include <sys/types.h>
 #	include <sys/stat.h>
 #	include <fcntl.h>
+#	include <semaphore.h>
+#	include <unistd.h>
+#	include <openssl/crypto.h>
+#endif
+
+static pthread_mutex_t *g_lockarray = NULL;
+static int g_iLockInitialized = 0;
+/* процедура блокировки дл openSSL */
+static void lock_callback (int mode, int type, const char *file, int line)
+{
+	(void) file;
+	(void) line;
+	if (mode & CRYPTO_LOCK) {
+		pthread_mutex_lock (&(g_lockarray[type]));
+	} else {
+		pthread_mutex_unlock (&(g_lockarray[type]));
+	}
+}
+/* процедура определения идентификатора потока */
+static unsigned long thread_id (void)
+{
+	unsigned long ret;
+
+	ret = (unsigned long) pthread_self ();
+
+	return (ret);
+}
+#ifdef USE_GNUTLS
+#include <gcrypt.h>
+#include <errno.h>
+GCRY_THREAD_OPTION_PTHREAD_IMPL;
+void init_locks (void)
+{
+	gcry_control (GCRYCTL_SET_THREAD_CBS);
+}
+#define kill_locks()
+#else
+void init_locks (void)
+{
+	int i;
+
+	g_lockarray = (pthread_mutex_t *)OPENSSL_malloc (CRYPTO_num_locks () * sizeof (pthread_mutex_t));
+	for (i = 0; i < CRYPTO_num_locks (); i++) {
+		pthread_mutex_init (&(g_lockarray[i]), NULL);
+	}
+
+	CRYPTO_set_id_callback ((unsigned long (*)()) thread_id);
+	CRYPTO_set_locking_callback ((void (*)(int, int, const char*, int)) lock_callback);
+
+	g_iLockInitialized = 1;
+}
+void kill_locks (void)
+{
+	int i;
+
+	CRYPTO_set_locking_callback (NULL);
+
+	if (g_iLockInitialized && g_lockarray) {
+		for (i = 0; i < CRYPTO_num_locks (); i++) {
+			pthread_mutex_destroy (&(g_lockarray[i]));
+		}
+	}
+
+	if (g_lockarray) {
+		OPENSSL_free (g_lockarray);
+	}
+}
 #endif
 
 bool operator < (const SOwnerData &p_soLeft, const SOwnerData &p_soRight)
@@ -27,475 +93,10 @@ bool operator < (const SOwnerData &p_soLeft, const SOwnerData &p_soRight)
 	}
 }
 
-int LoadFileList (
-	SResolverData *p_psoResData,
-	std::string &p_strDir)
-{
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
-	int iRetVal = 0;
-	int iFnRes;
-	CURL *pCurl = NULL;
-	FILE *psoFile = NULL;
-
-	do {
-		/* инициализация дескриптора */
-		pCurl = curl_easy_init ();
-		if (NULL == pCurl) {
-			iRetVal = CURLE_OUT_OF_MEMORY;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_init: out of memory", __FUNCTION__);
-			break;
-		}
-
-		/* put transfer data into callbacks */
-		std::string strFileName;
-		if (p_psoResData->m_soConf.m_strLocalDir.length ()) {
-			strFileName = p_psoResData->m_soConf.m_strLocalDir;
-			if (strFileName[strFileName.length () - 1] != '/') {
-				strFileName += '/';
-			}
-		}
-		strFileName += p_psoResData->m_soConf.m_strLocalFileList;
-		psoFile = fopen (strFileName.c_str (), "w");
-		if (NULL == psoFile) {
-			iRetVal = errno;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': fopen: error code: '%d'", __FUNCTION__, iFnRes);
-			break;
-		}
-		iFnRes = curl_easy_setopt (pCurl, CURLOPT_WRITEDATA, (void *) psoFile);
-		if (CURLE_OK != iFnRes) {
-			iRetVal = iFnRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-			break;
-		}
-
-		/* set an user name */
-		iFnRes = curl_easy_setopt (pCurl, CURLOPT_USERNAME , p_psoResData->m_soConf.m_strUserName.c_str ());
-		if (CURLE_OK != iFnRes) {
-			iRetVal = iFnRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-			break;
-		}
-
-		/* set an password */
-		iFnRes = curl_easy_setopt (pCurl, CURLOPT_PASSWORD , p_psoResData->m_soConf.m_strUserPswd.c_str ());
-		if (CURLE_OK != iFnRes) {
-			iRetVal = iFnRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-			break;
-		}
-
-		/* set an URL containing wildcard pattern (only in the last part) */
-		std::string strURL;
-		strURL = p_psoResData->m_soConf.m_strProto + "://" + p_psoResData->m_soConf.m_strHost + '/';
-		if (p_strDir.length ()) {
-			strURL += p_strDir + "/";
-		}
-		iFnRes = curl_easy_setopt (pCurl, CURLOPT_URL, strURL.c_str ());
-		if (CURLE_OK != iFnRes) {
-			iRetVal = iFnRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-			break;
-		}
-
-		/* если задан proxy host */
-		if (p_psoResData->m_soConf.m_strProxyHost.length ()) {
-			iFnRes = curl_easy_setopt (pCurl, CURLOPT_PROXY, p_psoResData->m_soConf.m_strProxyHost.c_str ());
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-		}
-
-		/* если задан proxy port */
-		if (p_psoResData->m_soConf.m_strProxyPort.length ()) {
-			long lPort = atol (p_psoResData->m_soConf.m_strProxyPort.c_str ());
-			iFnRes = curl_easy_setopt (pCurl, CURLOPT_PROXYPORT, lPort);
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-		}
-
-		/* perform request */
-		iFnRes = curl_easy_perform (pCurl);
-		if (CURLE_OK != iFnRes) {
-			iRetVal = iFnRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_perform: error code: '%d'", __FUNCTION__, iFnRes);
-			break;
-		}
-	} while (0);
-
-	/* освобождаем занятые ресурсы */
-	if (NULL != pCurl) {
-		curl_easy_cleanup (pCurl);
-	}
-	if (NULL != psoFile) {
-		fclose (psoFile);
-	}
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
-/******************************************************************************
-  Образец строки, содержащей информацию о элементе удаленной файловой системы
-  drwxr-x---   6 hpiumusr   iumusers        96 Nov  1 00:00 2013
-******************************************************************************/
-static const char g_mcFormat [] = "%s %u %s %s %u %s %u %u:%u %s";
-struct SFTPFileInfo {
-	char m_mcMode[16];
-	unsigned int m_uiUID;
-	char m_mcFileOwner[32];
-	char m_mcFileGroup[32];
-	unsigned int m_uiFileSize;
-	char m_mcMon[8];
-	unsigned int m_uiDay;
-	unsigned int m_uiHour;
-	unsigned int m_uiMin;
-	char m_mcFileName[256];
-};
-int ParseFileList (
-	SResolverData *p_psoResData,
-	std::set<std::string> &p_setFileList)
-{
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
-	int iRetVal = 0;
-	int iFnRes;
-	FILE *psoFile = NULL;
-
-	do {
-		std::string strFileName;
-		char mcBuf[1024];
-		SFTPFileInfo soInfo;
-
-		/* формируем имя файла, содержащего список файлов */
-		if (p_psoResData->m_soConf.m_strLocalDir.length ()) {
-			strFileName = p_psoResData->m_soConf.m_strLocalDir;
-			if (strFileName[strFileName.length () - 1] != '/') {
-				strFileName += '/';
-			}
-		}
-		strFileName += p_psoResData->m_soConf.m_strLocalFileList;
-		/* открываем файл, содержащий список файлов, на чтение */
-		psoFile = fopen (strFileName.c_str (), "r");
-		if (NULL == psoFile) {
-			iRetVal = errno;
-			break;
-		}
-		/* читаем файл построчно */
-		while (fgets (mcBuf, sizeof (mcBuf), psoFile)) {
-			iFnRes = sscanf (
-				mcBuf,
-				g_mcFormat,
-				soInfo.m_mcMode,
-				&soInfo.m_uiUID,
-				soInfo.m_mcFileOwner,
-				soInfo.m_mcFileGroup,
-				&soInfo.m_uiFileSize,
-				soInfo.m_mcMon,
-				&soInfo.m_uiDay,
-				&soInfo.m_uiHour,
-				&soInfo.m_uiMin,
-				soInfo.m_mcFileName);
-			if (10 != iFnRes) {
-				continue;
-			}
-			switch (soInfo.m_mcMode[0]) {
-			case 'd': /* если файл является директорией */
-				break;
-			default: /* во всех остальных случаях */
-				p_setFileList.insert (soInfo.m_mcFileName);
-				break;
-			}
-		}
-	} while (0);
-
-	if (NULL != psoFile) {
-		fclose (psoFile);
-	}
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
-int GetLastFileName (
-	SResolverData *p_psoResData,
-	std::string &p_strDir,
-	std::string &p_strFileName)
-{
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
-	int iRetVal = 0;
-	int iFnRes;
-
-	do {
-		/* загружаем список файлов */
-		iFnRes = LoadFileList (
-			p_psoResData,
-			p_strDir);
-		if (iFnRes) {
-			iRetVal = iFnRes;
-			break;
-		}
-		/* список файлов на удаленном сервере */
-		std::set<std::string> setFileList;
-		/* парсим список файлов */
-		iFnRes = ParseFileList (
-			p_psoResData,
-			setFileList);
-		if (iFnRes) {
-			iRetVal = iFnRes;
-			break;
-		}
-		/* проверка результата выполнения операции */
-		if (iFnRes || 0 == setFileList.size ()) {
-			if (iFnRes) {
-				iRetVal = iFnRes;
-			} else {
-				iRetVal = -1;
-			}
-			break;
-		}
-
-		/* выбираем последний файл из списка */
-		std::set<std::string>::reverse_iterator iterSet;
-		iterSet = setFileList.rbegin ();
-		p_strFileName = *(iterSet);
-
-		/* освобождаем ресурсы, занятые списком */
-		setFileList.clear ();
-	} while (0);
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
-int resolver_load_data (
-	SResolverData *p_psoResData,
-	int *p_piUpdated)
-{
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
-	int iRetVal = 0;
-	int iFnRes;
-	std::string strFileName;
-	if (p_piUpdated) {
-		*p_piUpdated = 0;
-	}
-
-	do {
-		/* запрашиваем имя актуального файла, содержащего список перенесенных номеров */
-		iFnRes = GetLastFileName (p_psoResData, p_psoResData->m_soConf.m_strPortDir, strFileName);
-		if (iFnRes) {
-			iRetVal = -1;
-			break;
-		}
-
-		/* проверяем не существует ли такой файл */
-		iFnRes = IsFileNotExists (p_psoResData->m_soConf.m_strLocalDir, strFileName);
-		if (iFnRes) {
-			/* загужаем с удаленного сервера файл, содеражащий список перенесенных номеров */
-			iFnRes = DownloadFile (p_psoResData, p_psoResData->m_soConf.m_strPortDir, strFileName);
-			if (iFnRes) {
-				iRetVal = -2;
-				break;
-			}
-
-			/* распаковываем файл, содержащий список перенесенных номеров */
-			SFileInfo
-				soUnZip = { "unzip", "", 0 },
-				soZipFile = { strFileName, p_psoResData->m_soConf.m_strLocalDir, 0 },
-				soCSVFile = { p_psoResData->m_soConf.m_strLocalPortFile, p_psoResData->m_soConf.m_strLocalDir, 0 };
-			iFnRes = ExtractZipFile (soUnZip, soZipFile, soCSVFile);
-			if (iFnRes) {
-				iRetVal = -3;
-				break;
-			}
-			if (p_piUpdated) {
-				++ (*p_piUpdated);
-			}
-		}
-
-		/* запрашиваем имя актуального файла, содержащего план нумерации */
-		iFnRes = GetLastFileName (p_psoResData, p_psoResData->m_soConf.m_strNumPlanDir, strFileName);
-		if (iFnRes) {
-			iRetVal = -4;
-			break;
-		}
-
-		/* проверяем существует ли такой файл */
-		iFnRes = IsFileNotExists (p_psoResData->m_soConf.m_strLocalDir, strFileName);
-		/* если файл не существует */
-		if (iFnRes) {
-			/* загужаем с удаленного сервера файл, содеражащий план нумерации */
-			iFnRes = DownloadFile (p_psoResData, p_psoResData->m_soConf.m_strNumPlanDir, strFileName);
-			if (iFnRes) {
-				iRetVal = -5;
-				break;
-			}
-
-			/* распаковываем файл, содержащий план нумерации */
-			SFileInfo
-				soUnZip = { "unzip", "", 0 },
-				soZipFile = { strFileName, p_psoResData->m_soConf.m_strLocalDir, 0 },
-				soCSVFile = { p_psoResData->m_soConf.m_strLocalNumPlanFile, p_psoResData->m_soConf.m_strLocalDir, 0 };
-			iFnRes = ExtractZipFile (soUnZip, soZipFile, soCSVFile);
-			if (iFnRes) {
-				iRetVal = -6;
-				break;
-			}
-			if (p_piUpdated) {
-				++ (*p_piUpdated);
-			}
-		}
-	} while (0);
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
-int DownloadFile (
-	SResolverData *p_psoResData,
-	std::string &p_strDir,
-	std::string &p_strFileName)
-{
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
-	int iRetVal = 0;
-	int iFnRes;
-	CURLcode curlRes;
-	CURL *pvCurl = NULL;
-	std::string strURL;
-	FILE *psoLocalFile = NULL;
-
-	do {
-		/* инициализация экземпляра CURL */
-		pvCurl = curl_easy_init ();
-		if (NULL == pvCurl) {
-			iRetVal = -1;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_init: out of memory", __FUNCTION__);
-			break;
-		}
-
-		/* user name */
-		if (p_psoResData->m_soConf.m_strUserName.length ()) {
-			curlRes = curl_easy_setopt (pvCurl, CURLOPT_USERNAME, p_psoResData->m_soConf.m_strUserName.c_str ());
-			if (curlRes) {
-				iRetVal = curlRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, curlRes);
-				break;
-			}
-		}
-
-		/* user password */
-		if (p_psoResData->m_soConf.m_strUserPswd.length ()) {
-			curlRes = curl_easy_setopt (pvCurl, CURLOPT_PASSWORD, p_psoResData->m_soConf.m_strUserPswd.c_str ());
-			if (curlRes) {
-				iRetVal = curlRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, curlRes);
-				break;
-			}
-		}
-
-		/* set write data */
-		std::string strLocalFileName;
-		if (p_psoResData->m_soConf.m_strLocalDir.length ()) {
-			strLocalFileName = p_psoResData->m_soConf.m_strLocalDir;
-			if (strLocalFileName[strLocalFileName.length () - 1] != '/' && strLocalFileName[strLocalFileName.length () - 1] != '\\') {
-				strLocalFileName += '/';
-			}
-		}
-		strLocalFileName += p_strFileName;
-		psoLocalFile = fopen (strLocalFileName.c_str (), "w");
-		if (NULL == psoLocalFile) {
-			iRetVal = errno;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': fopen: error code: '%d'", __FUNCTION__, iRetVal);
-			break;
-		}
-		curlRes = curl_easy_setopt (pvCurl, CURLOPT_WRITEDATA, (void *) psoLocalFile);
-		if (curlRes) {
-			iRetVal = curlRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, curlRes);
-			break;
-		}
-
-		/* URL */
-		strURL = p_psoResData->m_soConf.m_strProto;
-		strURL += "://";
-		strURL += p_psoResData->m_soConf.m_strHost;
-		strURL += '/';
-		strURL += p_strDir;
-		if (strURL[strURL.length () - 1] != '/') {
-			strURL += '/';
-		}
-		strURL += p_strFileName;
-		curlRes = curl_easy_setopt (pvCurl, CURLOPT_URL, strURL.c_str ());
-		if (curlRes) {
-			iRetVal = curlRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, curlRes);
-			break;
-		}
-
-		/* если задан proxy host */
-		if (p_psoResData->m_soConf.m_strProxyHost.length ()) {
-			iFnRes = curl_easy_setopt (pvCurl, CURLOPT_PROXY, p_psoResData->m_soConf.m_strProxyHost.c_str ());
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-		}
-
-		/* если задан proxy port */
-		if (p_psoResData->m_soConf.m_strProxyPort.length ()) {
-			long lPort = atol (p_psoResData->m_soConf.m_strProxyPort.c_str ());
-			iFnRes = curl_easy_setopt (pvCurl, CURLOPT_PROXYPORT, lPort);
-			if (CURLE_OK != iFnRes) {
-				iRetVal = iFnRes;
-				p_psoResData->m_coLog.WriteLog ("error: '%s': line: '%d'; curl_easy_setopt: error code: '%d'", __FUNCTION__, __LINE__, iFnRes);
-				break;
-			}
-		}
-
-		/* execute */
-		curlRes = curl_easy_perform (pvCurl);
-
-		/* если при выполнении запроса произошла ошибка */
-		if (curlRes) {
-			iRetVal = curlRes;
-			p_psoResData->m_coLog.WriteLog ("error: '%s': curl_easy_perform: error code: '%d'", __FUNCTION__, curlRes);
-			break;
-		}
-
-	} while (0);
-
-	if (pvCurl) {
-		curl_easy_cleanup (pvCurl);
-		pvCurl = NULL;
-	}
-	if (psoLocalFile) {
-		fclose (psoLocalFile);
-	}
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
 int ParseNumberinPlanFile (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache)
 {
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
 	int iRetVal = 0;
 	int iFnRes;
 	SOwnerData soResData = {0, 0, 0, "", 0, 0};
@@ -565,8 +166,6 @@ int ParseNumberinPlanFile (
 		psoFile = NULL;
 	}
 
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
 	return iRetVal;
 }
 
@@ -574,8 +173,6 @@ int ParsePortFile (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache)
 {
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
 	int iRetVal = 0;
 	int iFnRes;
 	SOwnerData soResData = {0, 0, 0, "", 0, 0};
@@ -646,28 +243,6 @@ int ParsePortFile (
 		psoFile = NULL;
 	}
 
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
-	return iRetVal;
-}
-
-int IsFileNotExists (
-	std::string &p_strDir,
-	std::string &p_strFileTitle)
-{
-	int iRetVal = 0;
-
-	std::string strFileName;
-	if (p_strDir.length ()) {
-		strFileName = p_strDir;
-		if (strFileName[strFileName.length () - 1] != '/' && strFileName[strFileName.length () - 1] != '\\') {
-			strFileName += '/';
-		}
-	}
-	strFileName += p_strFileTitle;
-
-	iRetVal = access (strFileName.c_str (), 0);
-
 	return iRetVal;
 }
 
@@ -675,8 +250,6 @@ int resolver_cache (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache)
 {
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
 	int iRetVal = 0;
 	int iFnRes;
 
@@ -696,15 +269,11 @@ int resolver_cache (
 		}
 	} while (0);
 
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
-
 	return 0;
 }
 
 int resolver_recreate_cache (SResolverData *p_psoResData)
 {
-	if (p_psoResData->m_iDebug > 1) ENTER_ROUT (p_psoResData->m_coLog);
-
 	int iRetVal = 0;
 	int iFnRes;
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > *pmapTmp =
@@ -722,7 +291,7 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 
 		/* ждем освобождения кэша всеми потоками */
 		for (int i = 0; i < 256; ++i) {
-			sem_wait (&(p_psoResData->m_tSemData));
+			sem_wait (p_psoResData->m_ptSemData);
 		}
 
 		/* запоминаем прежний кэш */
@@ -732,15 +301,13 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 
 		/* освобождаем семафор */
 		for (int i = 0; i < 256; ++i) {
-			sem_post (&(p_psoResData->m_tSemData));
+			sem_post (p_psoResData->m_ptSemData);
 		}
 
 		/* освобождаем память, занятую прежним кэшем */
 		pmapTmpOld->clear ();
 		delete pmapTmpOld;
 	} while (0);
-
-	if (p_psoResData->m_iDebug > 1) LEAVE_ROUT (p_psoResData->m_coLog, iRetVal);
 
 	return iRetVal;
 }
@@ -851,10 +418,6 @@ int resolver_apply_settings (
 		uiParamMask |= 2048;
 
 		/* далее разбираются опциональные параметры */
-		pszParamName = "debug";
-		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
-		if (!iFnRes)
-			p_soResConf.m_iDebug = atol (strParamVal.c_str());
 		pszParamName = "proxy_host";
 		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
 		if (!iFnRes)
@@ -1061,63 +624,6 @@ int InsertRangeDEF (
 			}
 		}
 	} while (0);
-
-	return iRetVal;
-}
-
-int ExtractZipFile (
-	SFileInfo &p_soUnZip,
-	SFileInfo &p_soZipFile,
-	SFileInfo &p_soOutput)
-{
-	int iRetVal = 0;
-
-	/* формируем командную строку */
-	std::string strCmdLine;
-	/* задаем директорию, если необходимо */
-	if (p_soUnZip.m_strDir.length ()) {
-		strCmdLine = p_soUnZip.m_strDir;
-		if (strCmdLine[strCmdLine.length () - 1] != '/' && strCmdLine[strCmdLine.length () - 1] != '\\') {
-			strCmdLine += '/';
-		}
-	}
-	/* задаем имя файла */
-	strCmdLine += p_soUnZip.m_strTitle;
-
-	/* формируем имя исходного файла */
-	std::string strZipFile;
-	/* задаем директорию, если необходимо */
-	if (p_soZipFile.m_strDir.length ()) {
-		strZipFile += p_soZipFile.m_strDir;
-		if (strZipFile[strZipFile.length () - 1] != '/' && strZipFile[strZipFile.length () - 1] != '\\') {
-			strZipFile += '/';
-		}
-	}
-	/* задаем имя файла */
-	strZipFile += p_soZipFile.m_strTitle;
-
-	/* формируем имя файла для записи результата */
-	std::string strOutputFile;
-	/* задаем директорию, если необходимо */
-	if (p_soOutput.m_strDir.length ()) {
-		strOutputFile += p_soOutput.m_strDir;
-		if (strOutputFile[strOutputFile.length () - 1] != '/' && strOutputFile[strOutputFile.length () - 1] != '\\') {
-			strOutputFile += '/';
-		}
-	}
-	/* задаем имя файла */
-	strOutputFile += p_soOutput.m_strTitle;
-
-	/* завершаем формирование командной строки */
-	strCmdLine += " -p \"";
-	strCmdLine += strZipFile;
-	strCmdLine += '"';
-	strCmdLine += " > \"";
-	strCmdLine += strOutputFile;
-	strCmdLine += '"';
-
-	/* выполняем операцию */
-	iRetVal = system (strCmdLine.c_str ());
 
 	return iRetVal;
 }

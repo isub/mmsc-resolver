@@ -1,3 +1,6 @@
+#ifndef _MMSC_RESOLVER_H_
+#define _MMSC_RESOLVER_H_
+
 #include "mmsc/mms_resolve.h"
 #include "mmlib/mms_util.h"
 #include "gwlib/gwlib.h"
@@ -19,3 +22,6 @@ MmsResolverFuncStruct mms_resolvefuncs = {
      mms_resolve,
      mms_resolvermodule_fini
 };
+
+
+#endif /* _MMSC_RESOLVER_H_ */

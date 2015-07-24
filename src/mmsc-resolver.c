@@ -1,11 +1,11 @@
-#include "resolver-operations.h"
 #include "mmsc/mmsc_cfg.h"
 
 #include "mmsc-resolver.h"
+#include "resolver-operations.h"
 
 static void *mms_resolvermodule_init (char *settings)
 {
-	return resolver_init (settings);
+	return (void*) resolver_init (settings);
 }
 
 static int mms_resolvermodule_fini (void *module_data)
