@@ -53,7 +53,7 @@ int main (int argc, char *argv[])
 		return -3;
 	}
 
-	sem_t *ptSem = NULL;
+	sem_t *ptSem = SEM_FAILED;
 
 #ifdef DEBUG
 	sem_unlink (SEM_NAME);
@@ -63,10 +63,10 @@ int main (int argc, char *argv[])
 #endif
 
 	/* инициализация семафора */
-	ptSem = sem_open (SEM_NAME, O_CREAT, S_IRWXU, 256);
+	ptSem = sem_open (SEM_NAME, O_CREAT, S_IRWXU, 1);
 	/* если семафор уже создан */
 	if (SEM_FAILED == ptSem && EACCES == errno) {
-		ptSem = sem_open (SEM_NAME, 0, S_IRWXU, 256);
+		ptSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
 	}
 	if (SEM_FAILED == ptSem) {
 		iFnRes = errno;
@@ -85,11 +85,10 @@ int main (int argc, char *argv[])
 	}
 
 	/* ожидаем освобождения необходимых файлов */
-	for (int i = 0; i < 256; ++i) {
-		if (sem_wait (ptSem)) {
-			UTL_LOG_E (coLog, "sem_wait returned error code: %d", errno);
-			goto clean_locks;
-		}
+	if (sem_wait (ptSem)) {
+		iFnRes = errno;
+		UTL_LOG_E (coLog, "sem_wait returned error code: %d", iFnRes);
+		goto clean_locks;
 	}
 
 	/* загружаем данные с удаленного сервера */
@@ -99,11 +98,10 @@ int main (int argc, char *argv[])
 	}
 
 	/* освобождаем семафор */
-	for (int i = 0; i < 256; ++i) {
-		if (sem_post (ptSem)) {
-			UTL_LOG_E (coLog, "sem_post returned error code: %d", errno);
-			goto clean_locks;
-		}
+	if (sem_post (ptSem)) {
+		iFnRes = errno;
+		UTL_LOG_E (coLog, "sem_post returned error code: %d", iFnRes);
+		goto clean_locks;
 	}
 
 	/* очищаем CURL */
@@ -113,17 +111,10 @@ clean_locks:
 	/* очищаем openSSL*/
 	kill_locks();
 	/* закрываем семафор */
-#ifdef DEBUG
-	iFnRes = sem_unlink (SEM_NAME);
-	if (iFnRes) {
-		UTL_LOG_E (coLog, "can not unlink semaphore: error code: %d", errno);
+	if (sem_close (ptSem)) {
+		iFnRes = errno;
+		UTL_LOG_E (coLog, "can not close semaphore: error code: %d", iFnRes);
 	}
-#else
-	iFnRes = sem_close (ptSem);
-	if (iFnRes) {
-		UTL_LOG_E (coLog, "can not close semaphore: error code: %d", errno);
-	}
-#endif
 exit:
 	coLog.Flush();
 

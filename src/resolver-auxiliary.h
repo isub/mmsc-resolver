@@ -52,14 +52,14 @@ struct SResolverData {
 	CLog m_coLog;
 	/* конфигурация модуля */
 	SResolverConf m_soConf;
-	/* объект семафора */
-	sem_t *m_ptSemData;
-	int m_iSemDataInitialized;
+	/* объект семафора для доступа к файлам numlex */
+	sem_t *m_ptNumlexSem;
+	/* объект семафора для доступа к кэшу */
+	sem_t m_tCacheSem;
 	/* идентификатор потока обновления кэша */
 	pthread_t m_tThreadUpdateCache;
-	/* дескриптом семафора потока обновления кэша, выполняющего роль таймера */
-	pthread_mutex_t m_tThreadMutex;
-	int m_iMutexInitialized;
+	/* дескриптор семафора потока обновления кэша, выполняющего роль таймера */
+	sem_t m_tThreadSem;
 	volatile int m_iContinueUpdate;
 };
 

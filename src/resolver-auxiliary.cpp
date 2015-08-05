@@ -281,6 +281,13 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > *pmapTmpOld;
 
 	do {
+		/* ждем освобождения файлов numlex */
+		iFnRes = sem_wait (p_psoResData->m_ptNumlexSem);
+		if (iFnRes) {
+			iFnRes = errno;
+			break;
+		}
+
 		/* создаем временный экземпляр кэша */
 		iFnRes = resolver_cache (p_psoResData, *pmapTmp);
 		if (iFnRes || 0 == pmapTmp->size ()) {
@@ -289,19 +296,38 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 			break;
 		}
 
-		/* ждем освобождения кэша всеми потоками */
-		for (int i = 0; i < 256; ++i) {
-			sem_wait (p_psoResData->m_ptSemData);
+		/* освобождаем семафор */
+		iFnRes = sem_post (p_psoResData->m_ptNumlexSem);
+		if (iFnRes) {
+			iFnRes = errno;
+			break;
 		}
 
 		/* запоминаем прежний кэш */
 		pmapTmpOld = p_psoResData->m_pmapResolverCache;
+
+		/* ожидаем освобождения кэша всеми потоками */
+		for (int i = 0; i < 256; i++) {
+			if (sem_wait (&p_psoResData->m_tCacheSem)) {
+				iRetVal = errno;
+				break;
+			}
+		}
+		if (iRetVal) {
+			delete pmapTmp;
+			pmapTmp = NULL;
+			break;
+		}
+
 		/* сохраняем новый кэш */
 		p_psoResData->m_pmapResolverCache = pmapTmp;
 
 		/* освобождаем семафор */
-		for (int i = 0; i < 256; ++i) {
-			sem_post (p_psoResData->m_ptSemData);
+		for (int i = 0; i < 256; i++) {
+			if (sem_post (&p_psoResData->m_tCacheSem)) {
+				iRetVal = errno;
+				break;
+			}
 		}
 
 		/* освобождаем память, занятую прежним кэшем */

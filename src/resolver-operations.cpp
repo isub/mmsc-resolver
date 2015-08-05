@@ -29,10 +29,9 @@ void * resolver_init (const char *p_pszConfFile)
 
 		/* инициализация параметров */
 		psoResData->m_tThreadUpdateCache = (pthread_t) -1;
+		psoResData->m_ptNumlexSem = SEM_FAILED;
 		psoResData->m_pmapResolverCache = NULL;
 		psoResData->m_iContinueUpdate = 1;
-		psoResData->m_iSemDataInitialized = 0;
-		psoResData->m_iMutexInitialized = 0;
 
 		/* загружаем конфигурацию модуля */
 		iFnRes = resolver_apply_settings (p_pszConfFile, psoResData->m_soConf);
@@ -50,29 +49,33 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* инициализируем мьютекс для ожидания потока обновления кэша */
-		iFnRes = pthread_mutex_init (&(psoResData->m_tThreadMutex), NULL);
+		/* создаем семафор доступа к файлам numlex */
+		psoResData->m_ptNumlexSem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, 1);
+		/* если семафор уже создан открыаем его */
+		if (SEM_FAILED == psoResData->m_ptNumlexSem && EACCES == errno) {
+			psoResData->m_ptNumlexSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
+		}
+		if (SEM_FAILED == psoResData->m_ptNumlexSem) {
+			resolver_fini (psoResData);
+			psoResData = NULL;
+			break;
+		}
+
+		/* инициализируем семафор для ожидания потока обновления кэша, создаем его запертым */
+		iFnRes = sem_init (&psoResData->m_tThreadSem, 0, 0);
 		if (iFnRes) {
 			resolver_fini (psoResData);
 			psoResData = NULL;
 			break;
 		}
-		psoResData->m_iMutexInitialized = 1;
-		/* запираем мьютекс потока обновления */
-		pthread_mutex_trylock (&(psoResData->m_tThreadMutex));
 
-		/* создаем семафор кэша */
-		psoResData->m_ptSemData = sem_open(SEM_NAME, O_CREAT, S_IRWXU, 256);
-		/* если семафор уже создан открыаем его */
-		if (SEM_FAILED == psoResData->m_ptSemData && EACCES == errno) {
-			psoResData->m_ptSemData = sem_open (SEM_NAME, 0, S_IRWXU, 256);
-		}
-		if (SEM_FAILED == psoResData->m_ptSemData) {
+		/* создаем семафор доступа к кэшу */
+		iFnRes = sem_init (&psoResData->m_tCacheSem, 0, 256);
+		if (iFnRes) {
 			resolver_fini (psoResData);
 			psoResData = NULL;
 			break;
 		}
-		psoResData->m_iSemDataInitialized = 1;
 
 		/* первоначальная загрузка данных */
 		/* выделяем память под кэш */
@@ -113,22 +116,9 @@ int resolver_fini (void *p_pPtr)
 	/* сообщаем потоку обновления кэша о необходимости завершения работы */
 	psoResData->m_iContinueUpdate = 0;
 
-	/* дожидаемся освобождения семафора данных всеми потоками */
-	int iFnRes;
-	if (psoResData->m_iSemDataInitialized) {
-		for (int i = 0; i < 256; ++i) {
-			iFnRes = sem_wait (psoResData->m_ptSemData);
-			/* если произошла ошибка завершаем цикл */
-			if (iFnRes) {
-				iRetVal = errno;
-				break;
-			}
-		}
-	}
-
-	/* отпускаем семафор ожидания потока */
-	if (psoResData->m_iMutexInitialized) {
-		pthread_mutex_unlock (&(psoResData->m_tThreadMutex));
+	/* отпускаем семафор ожидания потока обновления кэша */
+	if (sem_post (&psoResData->m_tThreadSem)) {
+		iRetVal = errno;
 	}
 
 	/* дожидаемся завершения работы потока обновления кэша */
@@ -136,17 +126,10 @@ int resolver_fini (void *p_pPtr)
 		pthread_join (psoResData->m_tThreadUpdateCache, NULL);
 	}
 
-	/* уничтожаем семафор потока обнавления */
-	if (psoResData->m_iMutexInitialized) {
-		iFnRes = pthread_mutex_destroy (&(psoResData->m_tThreadMutex));
-		if (iFnRes) {
-			iRetVal = errno;
-		}
-		psoResData->m_iMutexInitialized = 0;
+	/* ожидаем освобождение кэша всеми потоками */
+	for (int i = 0; i < 256; i++) {
+		sem_wait (&psoResData->m_tCacheSem);
 	}
-
-	/* сбрасываем все данные на диск */
-	psoResData->m_coLog.Flush ();
 
 	/* очищаем кэш */
 	if (psoResData->m_pmapResolverCache) {
@@ -155,13 +138,24 @@ int resolver_fini (void *p_pPtr)
 		psoResData->m_pmapResolverCache = NULL;
 	}
 
-	/* уничтожаем семафор данных */
-	if (psoResData->m_iSemDataInitialized) {
-		psoResData->m_iSemDataInitialized = 0;
-		iFnRes = sem_destroy (psoResData->m_ptSemData);
-		if (iFnRes) {
+	/* сбрасываем все данные на диск */
+	psoResData->m_coLog.Flush ();
+
+	/* уничтожаем семафор доступа к кэшу */
+	if (sem_destroy (&psoResData->m_tCacheSem)) {
+		iRetVal = errno;
+	}
+
+	/* уничтожаем семафор данных numlex */
+	if (SEM_FAILED != psoResData->m_ptNumlexSem) {
+		if (sem_close (psoResData->m_ptNumlexSem)) {
 			iRetVal = errno;
 		}
+	}
+
+	/* уничтожаем семафор потока обнавления */
+	if (sem_destroy (&psoResData->m_tThreadSem)) {
+		iRetVal = errno;
 	}
 
 	delete psoResData;
@@ -213,9 +207,8 @@ struct SOwnerData * resolver_resolve (
 
 		std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >::iterator iterMapABC;
 
-		int iFnRes;
-		iFnRes = sem_wait (psoResData->m_ptSemData);
-		if (iFnRes) {
+		/* ожидание освобождения семафора доступа к кэшу */
+		if (sem_wait (&psoResData->m_tCacheSem)) {
 			break;
 		}
 
@@ -245,7 +238,10 @@ struct SOwnerData * resolver_resolve (
 			}
 		} while (0);
 
-		sem_post (psoResData->m_ptSemData);
+		/* освобождение семафора доступа к кэшу */
+		if (sem_post (&psoResData->m_tCacheSem)) {
+			break;
+		}
 	} while (0);
 
 	if (psoRetVal) {
@@ -260,7 +256,7 @@ struct SOwnerData * resolver_resolve (
 static void * resolver_update_cache (void *p_pParam)
 {
 	timeval tCurrentTime;
-	timespec tMutexTime;
+	timespec tSemTime;
 	SResolverData *psoResData = (SResolverData *) p_pParam;
 
 	int iDataUpdated;
@@ -277,13 +273,14 @@ static void * resolver_update_cache (void *p_pParam)
 				break;
 			}
 			/* вычисляем время таймаута семафора */
-			tMutexTime.tv_sec = tCurrentTime.tv_sec + psoResData->m_soConf.m_uiUpdateInterval;
-			tMutexTime.tv_nsec = tCurrentTime.tv_usec * 1000;
-			/* ожидаем освобождения семафора или истечения таймаута */
-			iFnRes = pthread_mutex_timedlock (&(psoResData->m_tThreadMutex), &tMutexTime);
+			tSemTime.tv_sec = tCurrentTime.tv_sec + psoResData->m_soConf.m_uiUpdateInterval;
+			tSemTime.tv_nsec = tCurrentTime.tv_usec * 1000;
+			/* ожидаем освобождения мьютекса или истечения таймаута */
+			iFnRes = sem_timedwait (&psoResData->m_tThreadSem, &tSemTime);
 			/* если произошла ошибка */
 			if (iFnRes) {
 				/* из ошибок нас устроит только таймаут, остальные ошибки считаем фатальными */
+				iFnRes = errno;
 				if (ETIMEDOUT != iFnRes) {
 					/* завершаем цикл */
 					break;
