@@ -29,17 +29,17 @@ static Octstr *mms_resolve (
 	int j, m;
 	const char *pszPhoneNum;
 	Octstr *postrOwner;
-	struct SOwnerData *psoOwnerData;
+	const char *pszOwner;
 
 	pszPhoneNum = octstr_get_cstr (phonenum);
 	if (NULL == pszPhoneNum) {
 		return NULL;
 	}
-	psoOwnerData = resolver_resolve (pszPhoneNum, module_data);
-	if (NULL == psoOwnerData) {
+	pszOwner = resolver_resolve (pszPhoneNum, module_data);
+	if (NULL == pszOwner) {
 		return NULL;
 	}
-	postrOwner = octstr_create (psoOwnerData->m_mcOwner);
+	postrOwner = octstr_create (pszOwner);
 
 	if (proxyrelays && gwlist_len (proxyrelays) > 0) {
 		for (j = 0, m = gwlist_len (proxyrelays); j < m; j++) {

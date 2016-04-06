@@ -22,7 +22,7 @@
 
 static pthread_mutex_t *g_lockarray = NULL;
 static int g_iLockInitialized = 0;
-/* процедура блокировки дл openSSL */
+/* РїСЂРѕС†РµРґСѓСЂР° Р±Р»РѕРєРёСЂРѕРІРєРё РґР» openSSL */
 static void lock_callback (int mode, int type, const char *file, int line)
 {
 	(void) file;
@@ -33,7 +33,7 @@ static void lock_callback (int mode, int type, const char *file, int line)
 		pthread_mutex_unlock (&(g_lockarray[type]));
 	}
 }
-/* процедура определения идентификатора потока */
+/* РїСЂРѕС†РµРґСѓСЂР° РѕРїСЂРµРґРµР»РµРЅРёСЏ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂР° РїРѕС‚РѕРєР° */
 static unsigned long thread_id (void)
 {
 	unsigned long ret;
@@ -106,7 +106,7 @@ int ParseNumberinPlanFile (
 	std::string strFileName;
 
 	do {
-		/* формируем имя файла */
+		/* С„РѕСЂРјРёСЂСѓРµРј РёРјСЏ С„Р°Р№Р»Р° */
 		if (p_psoResData->m_soConf.m_strLocalDir.length ()) {
 			strFileName = p_psoResData->m_soConf.m_strLocalDir;
 			if (strFileName[strFileName.length () -1] != '/' && strFileName[strFileName.length () -1] != '\\') {
@@ -136,7 +136,7 @@ int ParseNumberinPlanFile (
 				soResData.m_mcOwner,
 				mcRegionCode,
 				mcMNC);
-			/* если вознила ошибка завершаем обработку */
+			/* РµСЃР»Рё РІРѕР·РЅРёР»Р° РѕС€РёР±РєР° Р·Р°РІРµСЂС€Р°РµРј РѕР±СЂР°Р±РѕС‚РєСѓ */
 			if (5 != iFnRes) {
 				iRetVal = -5;
 				break;
@@ -182,7 +182,7 @@ int ParsePortFile (
 	std::string strFileName;
 
 	do {
-		/* формируем имя файла */
+		/* С„РѕСЂРјРёСЂСѓРµРј РёРјСЏ С„Р°Р№Р»Р° */
 		if (p_psoResData->m_soConf.m_strLocalDir.length ()) {
 			strFileName = p_psoResData->m_soConf.m_strLocalDir;
 			if (strFileName[strFileName.length () -1] != '/' && strFileName[strFileName.length () -1] != '\\') {
@@ -212,7 +212,7 @@ int ParsePortFile (
 				mcMNC,
 				mcRoute,
 				mcRegionCode);
-			/* если вознила ошибка завершаем обработку */
+			/* РµСЃР»Рё РІРѕР·РЅРёР»Р° РѕС€РёР±РєР° Р·Р°РІРµСЂС€Р°РµРј РѕР±СЂР°Р±РѕС‚РєСѓ */
 			if (5 != iFnRes) {
 				iRetVal = -5;
 				break;
@@ -254,14 +254,14 @@ int resolver_cache (
 	int iFnRes;
 
 	do {
-		/* парсинг файла, содержащего план нумерации */
+		/* РїР°СЂСЃРёРЅРі С„Р°Р№Р»Р°, СЃРѕРґРµСЂР¶Р°С‰РµРіРѕ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 		iFnRes = ParseNumberinPlanFile (p_psoResData, p_mapCache);
 		if (iFnRes) {
 			iRetVal = -2;
 			break;
 		}
 
-		/* парсинг файла, содержащего список перенесенных номеров */
+		/* РїР°СЂСЃРёРЅРі С„Р°Р№Р»Р°, СЃРѕРґРµСЂР¶Р°С‰РµРіРѕ СЃРїРёСЃРѕРє РїРµСЂРµРЅРµСЃРµРЅРЅС‹С… РЅРѕРјРµСЂРѕРІ */
 		iFnRes = ParsePortFile (p_psoResData, p_mapCache);
 		if (iFnRes) {
 			iRetVal = -1;
@@ -281,14 +281,14 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > *pmapTmpOld;
 
 	do {
-		/* ждем освобождения файлов numlex */
+		/* Р¶РґРµРј РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ С„Р°Р№Р»РѕРІ numlex */
 		iFnRes = sem_wait (p_psoResData->m_ptNumlexSem);
 		if (iFnRes) {
 			iFnRes = errno;
 			break;
 		}
 
-		/* создаем временный экземпляр кэша */
+		/* СЃРѕР·РґР°РµРј РІСЂРµРјРµРЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ РєСЌС€Р° */
 		iFnRes = resolver_cache (p_psoResData, *pmapTmp);
 		if (iFnRes || 0 == pmapTmp->size ()) {
 			delete pmapTmp;
@@ -296,17 +296,17 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 			break;
 		}
 
-		/* освобождаем семафор */
+		/* РѕСЃРІРѕР±РѕР¶РґР°РµРј СЃРµРјР°С„РѕСЂ */
 		iFnRes = sem_post (p_psoResData->m_ptNumlexSem);
 		if (iFnRes) {
 			iFnRes = errno;
 			break;
 		}
 
-		/* запоминаем прежний кэш */
+		/* Р·Р°РїРѕРјРёРЅР°РµРј РїСЂРµР¶РЅРёР№ РєСЌС€ */
 		pmapTmpOld = p_psoResData->m_pmapResolverCache;
 
-		/* ожидаем освобождения кэша всеми потоками */
+		/* РѕР¶РёРґР°РµРј РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ РєСЌС€Р° РІСЃРµРјРё РїРѕС‚РѕРєР°РјРё */
 		for (int i = 0; i < 256; i++) {
 			if (sem_wait (&p_psoResData->m_tCacheSem)) {
 				iRetVal = errno;
@@ -319,10 +319,10 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 			break;
 		}
 
-		/* сохраняем новый кэш */
+		/* СЃРѕС…СЂР°РЅСЏРµРј РЅРѕРІС‹Р№ РєСЌС€ */
 		p_psoResData->m_pmapResolverCache = pmapTmp;
 
-		/* освобождаем семафор */
+		/* РѕСЃРІРѕР±РѕР¶РґР°РµРј СЃРµРјР°С„РѕСЂ */
 		for (int i = 0; i < 256; i++) {
 			if (sem_post (&p_psoResData->m_tCacheSem)) {
 				iRetVal = errno;
@@ -330,7 +330,7 @@ int resolver_recreate_cache (SResolverData *p_psoResData)
 			}
 		}
 
-		/* освобождаем память, занятую прежним кэшем */
+		/* РѕСЃРІРѕР±РѕР¶РґР°РµРј РїР°РјСЏС‚СЊ, Р·Р°РЅСЏС‚СѓСЋ РїСЂРµР¶РЅРёРј РєСЌС€РµРј */
 		pmapTmpOld->clear ();
 		delete pmapTmpOld;
 	} while (0);
@@ -443,7 +443,7 @@ int resolver_apply_settings (
 		p_soResConf.m_strLogFileMask = strParamVal;
 		uiParamMask |= 2048;
 
-		/* далее разбираются опциональные параметры */
+		/* РґР°Р»РµРµ СЂР°Р·Р±РёСЂР°СЋС‚СЃСЏ РѕРїС†РёРѕРЅР°Р»СЊРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ */
 		pszParamName = "proxy_host";
 		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
 		if (!iFnRes)
@@ -454,7 +454,7 @@ int resolver_apply_settings (
 			p_soResConf.m_strProxyPort = strParamVal;
 	} while (0);
 
-	/* проверяем, все ли нужные параметры мы получили */
+	/* РїСЂРѕРІРµСЂСЏРµРј, РІСЃРµ Р»Рё РЅСѓР¶РЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹ РјС‹ РїРѕР»СѓС‡РёР»Рё */
 	if (! (uiParamMask & (unsigned int) (4096 - 1))) {
 		iRetVal = uiParamMask;
 	}
@@ -480,7 +480,7 @@ int InsertRange (
 	char *pszEndPtr;
 
 	do {
-		/* получаем fromABC */
+		/* РїРѕР»СѓС‡Р°РµРј fromABC */
 		memcpy (mcTmp, p_pszFrom, 3);
 		mcTmp[3] = '\0';
 		uiFromABC = strtoul (mcTmp, &pszEndPtr, 10);
@@ -489,7 +489,7 @@ int InsertRange (
 			break;
 		}
 
-		/* получаем toABC */
+		/* РїРѕР»СѓС‡Р°РµРј toABC */
 		memcpy (mcTmp, p_pszTo, 3);
 		mcTmp[3] = '\0';
 		uiToABC = strtoul (mcTmp, &pszEndPtr, 10);
@@ -498,7 +498,7 @@ int InsertRange (
 			break;
 		}
 
-		/* получаем fromDEF */
+		/* РїРѕР»СѓС‡Р°РµРј fromDEF */
 		memcpy (mcTmp, &(p_pszFrom[3]), 3);
 		mcTmp[3] = '\0';
 		uiFromDEF = strtoul (mcTmp, &pszEndPtr, 10);
@@ -507,7 +507,7 @@ int InsertRange (
 			break;
 		}
 
-		/* получаем toDEF */
+		/* РїРѕР»СѓС‡Р°РµРј toDEF */
 		memcpy (mcTmp, &(p_pszTo[3]), 3);
 		mcTmp[3] = '\0';
 		uiToDEF = strtoul (mcTmp, &pszEndPtr, 10);
@@ -516,7 +516,7 @@ int InsertRange (
 			break;
 		}
 
-		/* получаем fromGHIJ */
+		/* РїРѕР»СѓС‡Р°РµРј fromGHIJ */
 		memcpy (mcTmp, &(p_pszFrom[6]), 4);
 		mcTmp[4] = '\0';
 		uiFromGHIJ = strtoul (mcTmp, &pszEndPtr, 10);
@@ -525,7 +525,7 @@ int InsertRange (
 			break;
 		}
 
-		/* получаем toGHIJ */
+		/* РїРѕР»СѓС‡Р°РµРј toGHIJ */
 		memcpy (mcTmp, &(p_pszTo[6]), 4);
 		mcTmp[4] = '\0';
 		uiToGHIJ = strtoul (mcTmp, &pszEndPtr, 10);
@@ -534,7 +534,7 @@ int InsertRange (
 			break;
 		}
 
-		/* проверка на всякий случай */
+		/* РїСЂРѕРІРµСЂРєР° РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№ */
 		if (uiFromABC > uiToABC) {
 			iRetVal = -7;
 			break;
@@ -549,21 +549,21 @@ int InsertRange (
 		std::map<unsigned int,std::multiset<SOwnerData> > mapTmpDEF;
 		std::map<unsigned int,std::multiset<SOwnerData> > *pmapDEF;
 
-		/* объодим все ABC */
+		/* РѕР±СЉРѕРґРёРј РІСЃРµ ABC */
 		uiDEF = uiFromDEF;
 		uiGHIJ = uiFromGHIJ;
 		for (uiABC = uiFromABC; uiABC <= uiToABC; ++uiABC) {
-			/* ищем в кэше ABC-ключ */
+			/* РёС‰РµРј РІ РєСЌС€Рµ ABC-РєР»СЋС‡ */
 			iterMapABC = p_pmapCache.find (uiABC);
-			/* если ключ не найден нам придется создать его позже */
+			/* РµСЃР»Рё РєР»СЋС‡ РЅРµ РЅР°Р№РґРµРЅ РЅР°Рј РїСЂРёРґРµС‚СЃСЏ СЃРѕР·РґР°С‚СЊ РµРіРѕ РїРѕР·Р¶Рµ */
 			if (iterMapABC == p_pmapCache.end ()) {
-				/* используем временное хранилище. позже с его помощью мы созданим недостающий ключ ABC */
+				/* РёСЃРїРѕР»СЊР·СѓРµРј РІСЂРµРјРµРЅРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ. РїРѕР·Р¶Рµ СЃ РµРіРѕ РїРѕРјРѕС‰СЊСЋ РјС‹ СЃРѕР·РґР°РЅРёРј РЅРµРґРѕСЃС‚Р°СЋС‰РёР№ РєР»СЋС‡ ABC */
 				mapTmpDEF.clear ();
 				pmapDEF = &mapTmpDEF;
 			} else {
 				pmapDEF = &(iterMapABC->second);
 			}
-			/* добавляем диапазон DEF в кэш */
+			/* РґРѕР±Р°РІР»СЏРµРј РґРёР°РїР°Р·РѕРЅ DEF РІ РєСЌС€ */
 			if (uiABC < uiToABC) {
 				iFnRes = InsertRangeDEF (
 					pmapDEF,
@@ -575,9 +575,9 @@ int InsertRange (
 				if (iFnRes) {
 					iRetVal = -7;
 				}
-				/* в дальшейшем нам не понадобится исходное значение fromDEF */
+				/* РІ РґР°Р»СЊС€РµР№С€РµРј РЅР°Рј РЅРµ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ РёСЃС…РѕРґРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ fromDEF */
 				uiDEF = 000;
-				/* в дальнейшем нам не понадобится исходное значение fromGHIJ */
+				/* РІ РґР°Р»СЊРЅРµР№С€РµРј РЅР°Рј РЅРµ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ РёСЃС…РѕРґРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ fromGHIJ */
 				uiGHIJ = 0000;
 			} else {
 				iFnRes = InsertRangeDEF (
@@ -612,7 +612,7 @@ int InsertRangeDEF (
 	int iRetVal = 0;
 
 	do {
-		/* на всякий случай проверяем параметры */
+		/* РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№ РїСЂРѕРІРµСЂСЏРµРј РїР°СЂР°РјРµС‚СЂС‹ */
 		if (p_uiFromDEF > p_uiToDEF) {
 			iRetVal = -1;
 			break;

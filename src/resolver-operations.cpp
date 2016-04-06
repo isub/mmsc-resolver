@@ -16,8 +16,10 @@
 #include <semaphore.h>
 #include <unistd.h>
 
-/* процедура потока обновления кэша */
+/* РїСЂРѕС†РµРґСѓСЂР° РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° */
 static void * resolver_update_cache (void *p_pParam);
+static const char * g_pszRedir = "mREDIRECT";
+static const char * g_pszMailRu = "mMAILRU";
 
 void * resolver_init (const char *p_pszConfFile)
 {
@@ -27,13 +29,13 @@ void * resolver_init (const char *p_pszConfFile)
 	do {
 		psoResData = new SResolverData;
 
-		/* инициализация параметров */
+		/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РїР°СЂР°РјРµС‚СЂРѕРІ */
 		psoResData->m_tThreadUpdateCache = (pthread_t) -1;
 		psoResData->m_ptNumlexSem = SEM_FAILED;
 		psoResData->m_pmapResolverCache = NULL;
 		psoResData->m_iContinueUpdate = 1;
 
-		/* загружаем конфигурацию модуля */
+		/* Р·Р°РіСЂСѓР¶Р°РµРј РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ РјРѕРґСѓР»СЏ */
 		iFnRes = resolver_apply_settings (p_pszConfFile, psoResData->m_soConf);
 		if (iFnRes) {
 			resolver_fini (psoResData);
@@ -41,7 +43,7 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* инициализация лог-файла */
+		/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Р»РѕРі-С„Р°Р№Р»Р° */
 		iFnRes = psoResData->m_coLog.Init (psoResData->m_soConf.m_strLogFileMask.c_str ());
 		if (iFnRes) {
 			resolver_fini (psoResData);
@@ -49,9 +51,9 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* создаем семафор доступа к файлам numlex */
+		/* СЃРѕР·РґР°РµРј СЃРµРјР°С„РѕСЂ РґРѕСЃС‚СѓРїР° Рє С„Р°Р№Р»Р°Рј numlex */
 		psoResData->m_ptNumlexSem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, 1);
-		/* если семафор уже создан открыаем его */
+		/* РµСЃР»Рё СЃРµРјР°С„РѕСЂ СѓР¶Рµ СЃРѕР·РґР°РЅ РѕС‚РєСЂС‹Р°РµРј РµРіРѕ */
 		if (SEM_FAILED == psoResData->m_ptNumlexSem && EACCES == errno) {
 			psoResData->m_ptNumlexSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
 		}
@@ -61,7 +63,7 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* инициализируем семафор для ожидания потока обновления кэша, создаем его запертым */
+		/* РёРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј СЃРµРјР°С„РѕСЂ РґР»СЏ РѕР¶РёРґР°РЅРёСЏ РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р°, СЃРѕР·РґР°РµРј РµРіРѕ Р·Р°РїРµСЂС‚С‹Рј */
 		iFnRes = sem_init (&psoResData->m_tThreadSem, 0, 0);
 		if (iFnRes) {
 			resolver_fini (psoResData);
@@ -69,7 +71,7 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* создаем семафор доступа к кэшу */
+		/* СЃРѕР·РґР°РµРј СЃРµРјР°С„РѕСЂ РґРѕСЃС‚СѓРїР° Рє РєСЌС€Сѓ */
 		iFnRes = sem_init (&psoResData->m_tCacheSem, 0, 256);
 		if (iFnRes) {
 			resolver_fini (psoResData);
@@ -77,10 +79,10 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* первоначальная загрузка данных */
-		/* выделяем память под кэш */
+		/* РїРµСЂРІРѕРЅР°С‡Р°Р»СЊРЅР°СЏ Р·Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С… */
+		/* РІС‹РґРµР»СЏРµРј РїР°РјСЏС‚СЊ РїРѕРґ РєСЌС€ */
 		psoResData->m_pmapResolverCache = new std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >;
-		/* формируем кэш */
+		/* С„РѕСЂРјРёСЂСѓРµРј РєСЌС€ */
 		iFnRes = resolver_cache (psoResData, *(psoResData->m_pmapResolverCache));
 		if (iFnRes) {
 			resolver_fini (psoResData);
@@ -88,7 +90,7 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* запуск потока обновления кэша */
+		/* Р·Р°РїСѓСЃРє РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° */
 		iFnRes = pthread_create (
 			&(psoResData->m_tThreadUpdateCache),
 			NULL,
@@ -113,47 +115,47 @@ int resolver_fini (void *p_pPtr)
 	int iRetVal = 0;
 	SResolverData *psoResData = (SResolverData *) p_pPtr;
 
-	/* сообщаем потоку обновления кэша о необходимости завершения работы */
+	/* СЃРѕРѕР±С‰Р°РµРј РїРѕС‚РѕРєСѓ РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° Рѕ РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹ */
 	psoResData->m_iContinueUpdate = 0;
 
-	/* отпускаем семафор ожидания потока обновления кэша */
+	/* РѕС‚РїСѓСЃРєР°РµРј СЃРµРјР°С„РѕСЂ РѕР¶РёРґР°РЅРёСЏ РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° */
 	if (sem_post (&psoResData->m_tThreadSem)) {
 		iRetVal = errno;
 	}
 
-	/* дожидаемся завершения работы потока обновления кэша */
+	/* РґРѕР¶РёРґР°РµРјСЃСЏ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹ РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° */
 	if ((pthread_t) -1 != psoResData->m_tThreadUpdateCache) {
 		pthread_join (psoResData->m_tThreadUpdateCache, NULL);
 	}
 
-	/* ожидаем освобождение кэша всеми потоками */
+	/* РѕР¶РёРґР°РµРј РѕСЃРІРѕР±РѕР¶РґРµРЅРёРµ РєСЌС€Р° РІСЃРµРјРё РїРѕС‚РѕРєР°РјРё */
 	for (int i = 0; i < 256; i++) {
 		sem_wait (&psoResData->m_tCacheSem);
 	}
 
-	/* очищаем кэш */
+	/* РѕС‡РёС‰Р°РµРј РєСЌС€ */
 	if (psoResData->m_pmapResolverCache) {
 		psoResData->m_pmapResolverCache->clear ();
 		delete psoResData->m_pmapResolverCache;
 		psoResData->m_pmapResolverCache = NULL;
 	}
 
-	/* сбрасываем все данные на диск */
+	/* СЃР±СЂР°СЃС‹РІР°РµРј РІСЃРµ РґР°РЅРЅС‹Рµ РЅР° РґРёСЃРє */
 	psoResData->m_coLog.Flush ();
 
-	/* уничтожаем семафор доступа к кэшу */
+	/* СѓРЅРёС‡С‚РѕР¶Р°РµРј СЃРµРјР°С„РѕСЂ РґРѕСЃС‚СѓРїР° Рє РєСЌС€Сѓ */
 	if (sem_destroy (&psoResData->m_tCacheSem)) {
 		iRetVal = errno;
 	}
 
-	/* уничтожаем семафор данных numlex */
+	/* СѓРЅРёС‡С‚РѕР¶Р°РµРј СЃРµРјР°С„РѕСЂ РґР°РЅРЅС‹С… numlex */
 	if (SEM_FAILED != psoResData->m_ptNumlexSem) {
 		if (sem_close (psoResData->m_ptNumlexSem)) {
 			iRetVal = errno;
 		}
 	}
 
-	/* уничтожаем семафор потока обнавления */
+	/* СѓРЅРёС‡С‚РѕР¶Р°РµРј СЃРµРјР°С„РѕСЂ РїРѕС‚РѕРєР° РѕР±РЅР°РІР»РµРЅРёСЏ */
 	if (sem_destroy (&psoResData->m_tThreadSem)) {
 		iRetVal = errno;
 	}
@@ -163,7 +165,7 @@ int resolver_fini (void *p_pPtr)
 	return iRetVal;
 }
 
-struct SOwnerData * resolver_resolve (
+const char * resolver_resolve (
 	const char *p_pszPhoneNum,
 	const void *p_pModuleData)
 {
@@ -172,7 +174,13 @@ struct SOwnerData * resolver_resolve (
 
 	do {
 		if (10 > strlen (p_pszPhoneNum)) {
-			break;
+      if (0 == strcmp(p_pszPhoneNum, "04040")) {
+        return g_pszRedir;
+      } else if(0 == strcmp(p_pszPhoneNum, "40404")) {
+        return g_pszMailRu;
+      } else {
+        break;
+      }
 		}
 
 		unsigned int uiABC;
@@ -181,7 +189,7 @@ struct SOwnerData * resolver_resolve (
 		char mcTmp[5];
 		char *pszEndPtr;
 
-		/* получаем ABC */
+		/* РїРѕР»СѓС‡Р°РµРј ABC */
 		memcpy (mcTmp, &(p_pszPhoneNum[2]), 3);
 		mcTmp[3] = '\0';
 		uiABC = strtoul (mcTmp, &pszEndPtr, 10);
@@ -189,7 +197,7 @@ struct SOwnerData * resolver_resolve (
 			break;
 		}
 
-		/* получаем DEF */
+		/* РїРѕР»СѓС‡Р°РµРј DEF */
 		memcpy (mcTmp, &(p_pszPhoneNum[5]), 3);
 		mcTmp[3] = '\0';
 		uiDEF = strtoul (mcTmp, &pszEndPtr, 10);
@@ -197,7 +205,7 @@ struct SOwnerData * resolver_resolve (
 			break;
 		}
 
-		/* получаем GHIJ */
+		/* РїРѕР»СѓС‡Р°РµРј GHIJ */
 		memcpy (mcTmp, &(p_pszPhoneNum[8]), 4);
 		mcTmp[4] = '\0';
 		uiGHIJ = strtoul (mcTmp, &pszEndPtr, 10);
@@ -207,13 +215,13 @@ struct SOwnerData * resolver_resolve (
 
 		std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >::iterator iterMapABC;
 
-		/* ожидание освобождения семафора доступа к кэшу */
+		/* РѕР¶РёРґР°РЅРёРµ РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ СЃРµРјР°С„РѕСЂР° РґРѕСЃС‚СѓРїР° Рє РєСЌС€Сѓ */
 		if (sem_wait (&psoResData->m_tCacheSem)) {
 			break;
 		}
 
 		do {
-			/* ищем ABC */
+			/* РёС‰РµРј ABC */
 			iterMapABC = psoResData->m_pmapResolverCache->find (uiABC);
 			if (iterMapABC == psoResData->m_pmapResolverCache->end ()) {
 				break;
@@ -222,13 +230,13 @@ struct SOwnerData * resolver_resolve (
 			std::map<unsigned int,std::multiset<SOwnerData> >::iterator iterMapDEF;
 			std::multiset<SOwnerData>::iterator iterResData;
 
-			/* ищем DEF */
+			/* РёС‰РµРј DEF */
 			iterMapDEF = iterMapABC->second.find (uiDEF);
 			if (iterMapDEF == iterMapABC->second.end ()) {
 				break;;
 			}
 
-			/* ищем GHIJ */
+			/* РёС‰РµРј GHIJ */
 			iterResData = iterMapDEF->second.begin ();
 			for (; iterResData != iterMapDEF->second.end (); ++iterResData) {
 				if (uiGHIJ >= iterResData->m_uiFromGHIJ && uiGHIJ <= iterResData->m_uiToGHIJ) {
@@ -238,7 +246,7 @@ struct SOwnerData * resolver_resolve (
 			}
 		} while (0);
 
-		/* освобождение семафора доступа к кэшу */
+		/* РѕСЃРІРѕР±РѕР¶РґРµРЅРёРµ СЃРµРјР°С„РѕСЂР° РґРѕСЃС‚СѓРїР° Рє РєСЌС€Сѓ */
 		if (sem_post (&psoResData->m_tCacheSem)) {
 			break;
 		}
@@ -250,7 +258,7 @@ struct SOwnerData * resolver_resolve (
 		psoResData->m_coLog.WriteLog ("'%s;: owner not found", p_pszPhoneNum);
 	}
 
-	return psoRetVal;
+	return (psoRetVal ? psoRetVal->m_mcOwner : NULL);
 }
 
 static void * resolver_update_cache (void *p_pParam)
@@ -267,36 +275,36 @@ static void * resolver_update_cache (void *p_pParam)
 
 	do {
 		while (psoResData->m_iContinueUpdate) {
-			/* получаем текущее время */
+			/* РїРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ РІСЂРµРјСЏ */
 			iFnRes = gettimeofday (&tCurrentTime, NULL);
 			if (iFnRes) {
 				break;
 			}
-			/* вычисляем время таймаута семафора */
+			/* РІС‹С‡РёСЃР»СЏРµРј РІСЂРµРјСЏ С‚Р°Р№РјР°СѓС‚Р° СЃРµРјР°С„РѕСЂР° */
 			tSemTime.tv_sec = tCurrentTime.tv_sec + psoResData->m_soConf.m_uiUpdateInterval;
 			tSemTime.tv_nsec = tCurrentTime.tv_usec * 1000;
-			/* ожидаем освобождения мьютекса или истечения таймаута */
+			/* РѕР¶РёРґР°РµРј РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ РјСЊСЋС‚РµРєСЃР° РёР»Рё РёСЃС‚РµС‡РµРЅРёСЏ С‚Р°Р№РјР°СѓС‚Р° */
 			iFnRes = sem_timedwait (&psoResData->m_tThreadSem, &tSemTime);
-			/* если произошла ошибка */
+			/* РµСЃР»Рё РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° */
 			if (iFnRes) {
-				/* из ошибок нас устроит только таймаут, остальные ошибки считаем фатальными */
+				/* РёР· РѕС€РёР±РѕРє РЅР°СЃ СѓСЃС‚СЂРѕРёС‚ С‚РѕР»СЊРєРѕ С‚Р°Р№РјР°СѓС‚, РѕСЃС‚Р°Р»СЊРЅС‹Рµ РѕС€РёР±РєРё СЃС‡РёС‚Р°РµРј С„Р°С‚Р°Р»СЊРЅС‹РјРё */
 				iFnRes = errno;
 				if (ETIMEDOUT != iFnRes) {
-					/* завершаем цикл */
+					/* Р·Р°РІРµСЂС€Р°РµРј С†РёРєР» */
 					break;
 				}
 			}
 
-			/* если сброшен флаг продолжения работы */
+			/* РµСЃР»Рё СЃР±СЂРѕС€РµРЅ С„Р»Р°Рі РїСЂРѕРґРѕР»Р¶РµРЅРёСЏ СЂР°Р±РѕС‚С‹ */
 			if (0 == psoResData->m_iContinueUpdate) {
-				/* завершаем цикл */
+				/* Р·Р°РІРµСЂС€Р°РµРј С†РёРєР» */
 				break;
 			} else {
 			}
 
-			/* проверяем не обновились ли файлы данных */
+			/* РїСЂРѕРІРµСЂСЏРµРј РЅРµ РѕР±РЅРѕРІРёР»РёСЃСЊ Р»Рё С„Р°Р№Р»С‹ РґР°РЅРЅС‹С… */
 			iDataUpdated = 0;
-			/* проверяем время изменения файла плана нумерации */
+			/* РїСЂРѕРІРµСЂСЏРµРј РІСЂРµРјСЏ РёР·РјРµРЅРµРЅРёСЏ С„Р°Р№Р»Р° РїР»Р°РЅР° РЅСѓРјРµСЂР°С†РёРё */
 			std::string strFileName;
 			if (psoResData->m_soConf.m_strLocalDir.length()) {
 				strFileName = psoResData->m_soConf.m_strLocalDir;
@@ -316,7 +324,7 @@ static void * resolver_update_cache (void *p_pParam)
 				++iDataUpdated;
 				tLastTime = soStat.st_ctime;
 			}
-			/* преверяем время изменения файла портированных номеров */
+			/* РїСЂРµРІРµСЂСЏРµРј РІСЂРµРјСЏ РёР·РјРµРЅРµРЅРёСЏ С„Р°Р№Р»Р° РїРѕСЂС‚РёСЂРѕРІР°РЅРЅС‹С… РЅРѕРјРµСЂРѕРІ */
 			if (psoResData->m_soConf.m_strLocalDir.length()) {
 				strFileName = psoResData->m_soConf.m_strLocalDir;
 				if (strFileName[strFileName.length() - 1] != '/')
@@ -335,7 +343,7 @@ static void * resolver_update_cache (void *p_pParam)
 				++iDataUpdated;
 				tLastTime = soStat.st_ctime;
 			}
-			/* если данные обновились */
+			/* РµСЃР»Рё РґР°РЅРЅС‹Рµ РѕР±РЅРѕРІРёР»РёСЃСЊ */
 			if (iDataUpdated) {
 				resolver_recreate_cache (psoResData);
 			}

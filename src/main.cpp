@@ -8,21 +8,21 @@
 #include <errno.h>
 #include <stdlib.h>
 
-/* загружает данные с удаленного сервера */
+/* Р·Р°РіСЂСѓР¶Р°РµС‚ РґР°РЅРЅС‹Рµ СЃ СѓРґР°Р»РµРЅРЅРѕРіРѕ СЃРµСЂРІРµСЂР° */
 int resolver_load_data(SResolverConf &p_soConf, CLog &p_coLog);
-/* проверяет не существует ли файл. если файл существует функция возвращает '0', в противном случае функция возвращает '-1' */
+/* РїСЂРѕРІРµСЂСЏРµС‚ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё С„Р°Р№Р». РµСЃР»Рё С„Р°Р№Р» СЃСѓС‰РµСЃС‚РІСѓРµС‚ С„СѓРЅРєС†РёСЏ РІРѕР·РІСЂР°С‰Р°РµС‚ '0', РІ РїСЂРѕС‚РёРІРЅРѕРј СЃР»СѓС‡Р°Рµ С„СѓРЅРєС†РёСЏ РІРѕР·РІСЂР°С‰Р°РµС‚ '-1' */
 int IsFileNotExists(
 	std::string &p_strDir,
 	std::string &p_strFileTitle);
-/* загружает файл с удаленного сервера */
+/* Р·Р°РіСЂСѓР¶Р°РµС‚ С„Р°Р№Р» СЃ СѓРґР°Р»РµРЅРЅРѕРіРѕ СЃРµСЂРІРµСЂР° */
 int DownloadFile(SResolverConf &p_soConf, std::string &p_strDir, std::string &p_strFileName, CLog &p_coLog);
-/* получает имя актуального файла */
+/* РїРѕР»СѓС‡Р°РµС‚ РёРјСЏ Р°РєС‚СѓР°Р»СЊРЅРѕРіРѕ С„Р°Р№Р»Р° */
 int GetLastFileName(SResolverConf &p_soConf, std::string &p_strDir, std::string &p_strFileName, CLog &p_coLog);
-/* декомпрессия исходных данных */
+/* РґРµРєРѕРјРїСЂРµСЃСЃРёСЏ РёСЃС…РѕРґРЅС‹С… РґР°РЅРЅС‹С… */
 int ExtractZipFile(SFileInfo &p_soUnZip, SFileInfo &p_soZipFile, SFileInfo &p_soOutput);
-/* загрузка списка файлов */
+/* Р·Р°РіСЂСѓР·РєР° СЃРїРёСЃРєР° С„Р°Р№Р»РѕРІ */
 int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog);
-/* парсинг списка файлов */
+/* РїР°СЂСЃРёРЅРі СЃРїРёСЃРєР° С„Р°Р№Р»РѕРІ */
 int ParseFileList (SResolverConf &p_soConf, std::set<std::string> &p_setFileList);
 
 int main (int argc, char *argv[])
@@ -41,13 +41,13 @@ int main (int argc, char *argv[])
 
 	if (strConfFileName.length() == 0)
 		return -1;
-	/* загружаем конфигурацию модуля */
+	/* Р·Р°РіСЂСѓР¶Р°РµРј РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ РјРѕРґСѓР»СЏ */
 	iFnRes = resolver_apply_settings(strConfFileName.c_str(), soConf);
 	if (iFnRes) {
 		return -2;
 	}
 
-	/* инициализация логгера */
+	/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Р»РѕРіРіРµСЂР° */
 	iFnRes = coLog.Init(soConf.m_strLogFileMask.c_str());
 	if (iFnRes){
 		return -3;
@@ -62,9 +62,9 @@ int main (int argc, char *argv[])
 	}
 #endif
 
-	/* инициализация семафора */
+	/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЃРµРјР°С„РѕСЂР° */
 	ptSem = sem_open (SEM_NAME, O_CREAT, S_IRWXU, 1);
-	/* если семафор уже создан */
+	/* РµСЃР»Рё СЃРµРјР°С„РѕСЂ СѓР¶Рµ СЃРѕР·РґР°РЅ */
 	if (SEM_FAILED == ptSem && EACCES == errno) {
 		ptSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
 	}
@@ -74,43 +74,43 @@ int main (int argc, char *argv[])
 		goto exit;
 	}
 
-	/* инициализация объектов синхронизации openSSL */
+	/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РѕР±СЉРµРєС‚РѕРІ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё openSSL */
 	init_locks();
 
-	/* инициализация библиотеки CURL */
+	/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Р±РёР±Р»РёРѕС‚РµРєРё CURL */
 	iFnRes = curl_global_init(CURL_GLOBAL_DEFAULT);
 	if (CURLE_OK != iFnRes) {
 		UTL_LOG_E(coLog,"curl_global_init: error code: '%d'", iFnRes);
 		goto clean_locks;
 	}
 
-	/* ожидаем освобождения необходимых файлов */
+	/* РѕР¶РёРґР°РµРј РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ РЅРµРѕР±С…РѕРґРёРјС‹С… С„Р°Р№Р»РѕРІ */
 	if (sem_wait (ptSem)) {
 		iFnRes = errno;
 		UTL_LOG_E (coLog, "sem_wait returned error code: %d", iFnRes);
 		goto clean_locks;
 	}
 
-	/* загружаем данные с удаленного сервера */
+	/* Р·Р°РіСЂСѓР¶Р°РµРј РґР°РЅРЅС‹Рµ СЃ СѓРґР°Р»РµРЅРЅРѕРіРѕ СЃРµСЂРІРµСЂР° */
 	iFnRes = resolver_load_data (soConf, coLog);
 	if (iFnRes) {
 		UTL_LOG_E (coLog, "can not load data");
 	}
 
-	/* освобождаем семафор */
+	/* РѕСЃРІРѕР±РѕР¶РґР°РµРј СЃРµРјР°С„РѕСЂ */
 	if (sem_post (ptSem)) {
 		iFnRes = errno;
 		UTL_LOG_E (coLog, "sem_post returned error code: %d", iFnRes);
 		goto clean_locks;
 	}
 
-	/* очищаем CURL */
+	/* РѕС‡РёС‰Р°РµРј CURL */
 	curl_global_cleanup();
 
 clean_locks:
-	/* очищаем openSSL*/
+	/* РѕС‡РёС‰Р°РµРј openSSL*/
 	kill_locks();
-	/* закрываем семафор */
+	/* Р·Р°РєСЂС‹РІР°РµРј СЃРµРјР°С„РѕСЂ */
 	if (sem_close (ptSem)) {
 		iFnRes = errno;
 		UTL_LOG_E (coLog, "can not close semaphore: error code: %d", iFnRes);
@@ -128,7 +128,7 @@ int replaceFile(SFileInfo &p_soFileInfoNew, SFileInfo &p_soFileInfoOld, CLog &p_
 	std::string strFileName;
 
 	do {
-		/* удаляем старый файл */
+		/* СѓРґР°Р»СЏРµРј СЃС‚Р°СЂС‹Р№ С„Р°Р№Р» */
 		if (p_soFileInfoOld.m_strDir.length()) {
 			strFileName = p_soFileInfoOld.m_strDir;
 			if (strFileName[strFileName.length() - 1] != '/')
@@ -145,7 +145,7 @@ int replaceFile(SFileInfo &p_soFileInfoNew, SFileInfo &p_soFileInfoOld, CLog &p_
 			break;
 		}
 
-		/* переименовываем новый файл */
+		/* РїРµСЂРµРёРјРµРЅРѕРІС‹РІР°РµРј РЅРѕРІС‹Р№ С„Р°Р№Р» */
 		std::string strFileName2;
 		if (p_soFileInfoNew.m_strDir.length()) {
 			strFileName2 = p_soFileInfoNew.m_strDir;
@@ -174,24 +174,24 @@ int resolver_load_data (SResolverConf &p_soConf, CLog &p_coLog)
 	std::string strFileName;
 
 	do {
-		/* запрашиваем имя актуального файла, содержащего список перенесенных номеров */
+		/* Р·Р°РїСЂР°С€РёРІР°РµРј РёРјСЏ Р°РєС‚СѓР°Р»СЊРЅРѕРіРѕ С„Р°Р№Р»Р°, СЃРѕРґРµСЂР¶Р°С‰РµРіРѕ СЃРїРёСЃРѕРє РїРµСЂРµРЅРµСЃРµРЅРЅС‹С… РЅРѕРјРµСЂРѕРІ */
 		iFnRes = GetLastFileName(p_soConf, p_soConf.m_strPortDir, strFileName, p_coLog);
 		if (iFnRes) {
 			iRetVal = -1;
 			break;
 		}
 
-		/* проверяем не существует ли такой файл на нашем диске */
+		/* РїСЂРѕРІРµСЂСЏРµРј РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё С‚Р°РєРѕР№ С„Р°Р№Р» РЅР° РЅР°С€РµРј РґРёСЃРєРµ */
 		iFnRes = IsFileNotExists(p_soConf.m_strLocalDir, strFileName);
 		if (iFnRes) {
-			/* если на диске такого файла нет загружаем с удаленного сервера */
+			/* РµСЃР»Рё РЅР° РґРёСЃРєРµ С‚Р°РєРѕРіРѕ С„Р°Р№Р»Р° РЅРµС‚ Р·Р°РіСЂСѓР¶Р°РµРј СЃ СѓРґР°Р»РµРЅРЅРѕРіРѕ СЃРµСЂРІРµСЂР° */
 			iFnRes = DownloadFile(p_soConf, p_soConf.m_strPortDir, strFileName, p_coLog);
 			if (iFnRes) {
 				iRetVal = -2;
 				break;
 			}
 
-			/* распаковываем файл, содержащий список перенесенных номеров */
+			/* СЂР°СЃРїР°РєРѕРІС‹РІР°РµРј С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ СЃРїРёСЃРѕРє РїРµСЂРµРЅРµСЃРµРЅРЅС‹С… РЅРѕРјРµСЂРѕРІ */
 			SFileInfo
 				soUnZip = { "unzip", "", 0 },
 				soZipFile = { strFileName, p_soConf.m_strLocalDir, 0 },
@@ -202,7 +202,7 @@ int resolver_load_data (SResolverConf &p_soConf, CLog &p_coLog)
 				iRetVal = -3;
 				break;
 			}
-			/* если распаковка завершилась успешно заменяем старый файл */
+			/* РµСЃР»Рё СЂР°СЃРїР°РєРѕРІРєР° Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СѓСЃРїРµС€РЅРѕ Р·Р°РјРµРЅСЏРµРј СЃС‚Р°СЂС‹Р№ С„Р°Р№Р» */
 			iFnRes = replaceFile(soCSVFileTmp, soCSVFile, p_coLog);
 			if (iFnRes) {
 				iRetVal = -4;
@@ -210,25 +210,25 @@ int resolver_load_data (SResolverConf &p_soConf, CLog &p_coLog)
 			}
 		}
 
-		/* запрашиваем имя актуального файла, содержащего план нумерации */
+		/* Р·Р°РїСЂР°С€РёРІР°РµРј РёРјСЏ Р°РєС‚СѓР°Р»СЊРЅРѕРіРѕ С„Р°Р№Р»Р°, СЃРѕРґРµСЂР¶Р°С‰РµРіРѕ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 		iFnRes = GetLastFileName(p_soConf, p_soConf.m_strNumPlanDir, strFileName, p_coLog);
 		if (iFnRes) {
 			iRetVal = -5;
 			break;
 		}
 
-		/* проверяем существует ли такой файл */
+		/* РїСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё С‚Р°РєРѕР№ С„Р°Р№Р» */
 		iFnRes = IsFileNotExists(p_soConf.m_strLocalDir, strFileName);
-		/* если файл не существует */
+		/* РµСЃР»Рё С„Р°Р№Р» РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚ */
 		if (iFnRes) {
-			/* загужаем с удаленного сервера файл, содеражащий план нумерации */
+			/* Р·Р°РіСѓР¶Р°РµРј СЃ СѓРґР°Р»РµРЅРЅРѕРіРѕ СЃРµСЂРІРµСЂР° С„Р°Р№Р», СЃРѕРґРµСЂР°Р¶Р°С‰РёР№ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 			iFnRes = DownloadFile(p_soConf, p_soConf.m_strNumPlanDir, strFileName, p_coLog);
 			if (iFnRes) {
 				iRetVal = -6;
 				break;
 			}
 
-			/* распаковываем файл, содержащий план нумерации */
+			/* СЂР°СЃРїР°РєРѕРІС‹РІР°РµРј С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 			SFileInfo
 				soUnZip = { "unzip", "", 0 },
 				soZipFile = { strFileName, p_soConf.m_strLocalDir, 0 },
@@ -239,7 +239,7 @@ int resolver_load_data (SResolverConf &p_soConf, CLog &p_coLog)
 				iRetVal = -7;
 				break;
 			}
-			/* если распаковка завершилась успешно заменяем старый файл */
+			/* РµСЃР»Рё СЂР°СЃРїР°РєРѕРІРєР° Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СѓСЃРїРµС€РЅРѕ Р·Р°РјРµРЅСЏРµРј СЃС‚Р°СЂС‹Р№ С„Р°Р№Р» */
 			iFnRes = replaceFile(soCSVFileTmp, soCSVFile, p_coLog);
 			if (iFnRes) {
 				iRetVal = -8;
@@ -279,7 +279,7 @@ int DownloadFile (SResolverConf &p_soConf, std::string &p_strDir, std::string &p
 	FILE *psoLocalFile = NULL;
 
 	do {
-		/* инициализация экземпляра CURL */
+		/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЌРєР·РµРјРїР»СЏСЂР° CURL */
 		pvCurl = curl_easy_init();
 		if (NULL == pvCurl) {
 			iRetVal = -1;
@@ -346,7 +346,7 @@ int DownloadFile (SResolverConf &p_soConf, std::string &p_strDir, std::string &p
 			break;
 		}
 
-		/* если задан proxy host */
+		/* РµСЃР»Рё Р·Р°РґР°РЅ proxy host */
 		if (p_soConf.m_strProxyHost.length()) {
 			iFnRes = curl_easy_setopt(pvCurl, CURLOPT_PROXY, p_soConf.m_strProxyHost.c_str());
 			if (CURLE_OK != iFnRes) {
@@ -356,7 +356,7 @@ int DownloadFile (SResolverConf &p_soConf, std::string &p_strDir, std::string &p
 			}
 		}
 
-		/* если задан proxy port */
+		/* РµСЃР»Рё Р·Р°РґР°РЅ proxy port */
 		if (p_soConf.m_strProxyPort.length()) {
 			long lPort = atol(p_soConf.m_strProxyPort.c_str());
 			iFnRes = curl_easy_setopt(pvCurl, CURLOPT_PROXYPORT, lPort);
@@ -370,7 +370,7 @@ int DownloadFile (SResolverConf &p_soConf, std::string &p_strDir, std::string &p
 		/* execute */
 		curlRes = curl_easy_perform(pvCurl);
 
-		/* если при выполнении запроса произошла ошибка */
+		/* РµСЃР»Рё РїСЂРё РІС‹РїРѕР»РЅРµРЅРёРё Р·Р°РїСЂРѕСЃР° РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° */
 		if (curlRes) {
 			iRetVal = curlRes;
 			UTL_LOG_E(p_coLog, "curl_easy_perform: error code: '%d'", curlRes);
@@ -396,15 +396,15 @@ int GetLastFileName (SResolverConf &p_soConf, std::string &p_strDir, std::string
 	int iFnRes;
 
 	do {
-		/* загружаем список файлов */
+		/* Р·Р°РіСЂСѓР¶Р°РµРј СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ */
 		iFnRes = LoadFileList(p_soConf, p_strDir, p_coLog);
 		if (iFnRes) {
 			iRetVal = iFnRes;
 			break;
 		}
-		/* список файлов на удаленном сервере */
+		/* СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ РЅР° СѓРґР°Р»РµРЅРЅРѕРј СЃРµСЂРІРµСЂРµ */
 		std::set<std::string> setFileList;
-		/* парсим список файлов */
+		/* РїР°СЂСЃРёРј СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ */
 		iFnRes = ParseFileList(
 			p_soConf,
 			setFileList);
@@ -412,7 +412,7 @@ int GetLastFileName (SResolverConf &p_soConf, std::string &p_strDir, std::string
 			iRetVal = iFnRes;
 			break;
 		}
-		/* проверка результата выполнения операции */
+		/* РїСЂРѕРІРµСЂРєР° СЂРµР·СѓР»СЊС‚Р°С‚Р° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё */
 		if (iFnRes || 0 == setFileList.size()) {
 			if (iFnRes) {
 				iRetVal = iFnRes;
@@ -422,12 +422,12 @@ int GetLastFileName (SResolverConf &p_soConf, std::string &p_strDir, std::string
 			break;
 		}
 
-		/* выбираем последний файл из списка */
+		/* РІС‹Р±РёСЂР°РµРј РїРѕСЃР»РµРґРЅРёР№ С„Р°Р№Р» РёР· СЃРїРёСЃРєР° */
 		std::set<std::string>::reverse_iterator iterSet;
 		iterSet = setFileList.rbegin();
 		p_strFileName = *(iterSet);
 
-		/* освобождаем ресурсы, занятые списком */
+		/* РѕСЃРІРѕР±РѕР¶РґР°РµРј СЂРµСЃСѓСЂСЃС‹, Р·Р°РЅСЏС‚С‹Рµ СЃРїРёСЃРєРѕРј */
 		setFileList.clear();
 	} while (0);
 
@@ -438,43 +438,43 @@ int ExtractZipFile(SFileInfo &p_soUnZip, SFileInfo &p_soZipFile, SFileInfo &p_so
 {
 	int iRetVal = 0;
 
-	/* формируем командную строку */
+	/* С„РѕСЂРјРёСЂСѓРµРј РєРѕРјР°РЅРґРЅСѓСЋ СЃС‚СЂРѕРєСѓ */
 	std::string strCmdLine;
-	/* задаем директорию, если необходимо */
+	/* Р·Р°РґР°РµРј РґРёСЂРµРєС‚РѕСЂРёСЋ, РµСЃР»Рё РЅРµРѕР±С…РѕРґРёРјРѕ */
 	if (p_soUnZip.m_strDir.length()) {
 		strCmdLine = p_soUnZip.m_strDir;
 		if (strCmdLine[strCmdLine.length() - 1] != '/' && strCmdLine[strCmdLine.length() - 1] != '\\') {
 			strCmdLine += '/';
 		}
 	}
-	/* задаем имя файла */
+	/* Р·Р°РґР°РµРј РёРјСЏ С„Р°Р№Р»Р° */
 	strCmdLine += p_soUnZip.m_strTitle;
 
-	/* формируем имя исходного файла */
+	/* С„РѕСЂРјРёСЂСѓРµРј РёРјСЏ РёСЃС…РѕРґРЅРѕРіРѕ С„Р°Р№Р»Р° */
 	std::string strZipFile;
-	/* задаем директорию, если необходимо */
+	/* Р·Р°РґР°РµРј РґРёСЂРµРєС‚РѕСЂРёСЋ, РµСЃР»Рё РЅРµРѕР±С…РѕРґРёРјРѕ */
 	if (p_soZipFile.m_strDir.length()) {
 		strZipFile += p_soZipFile.m_strDir;
 		if (strZipFile[strZipFile.length() - 1] != '/' && strZipFile[strZipFile.length() - 1] != '\\') {
 			strZipFile += '/';
 		}
 	}
-	/* задаем имя файла */
+	/* Р·Р°РґР°РµРј РёРјСЏ С„Р°Р№Р»Р° */
 	strZipFile += p_soZipFile.m_strTitle;
 
-	/* формируем имя файла для записи результата */
+	/* С„РѕСЂРјРёСЂСѓРµРј РёРјСЏ С„Р°Р№Р»Р° РґР»СЏ Р·Р°РїРёСЃРё СЂРµР·СѓР»СЊС‚Р°С‚Р° */
 	std::string strOutputFile;
-	/* задаем директорию, если необходимо */
+	/* Р·Р°РґР°РµРј РґРёСЂРµРєС‚РѕСЂРёСЋ, РµСЃР»Рё РЅРµРѕР±С…РѕРґРёРјРѕ */
 	if (p_soOutput.m_strDir.length()) {
 		strOutputFile += p_soOutput.m_strDir;
 		if (strOutputFile[strOutputFile.length() - 1] != '/' && strOutputFile[strOutputFile.length() - 1] != '\\') {
 			strOutputFile += '/';
 		}
 	}
-	/* задаем имя файла */
+	/* Р·Р°РґР°РµРј РёРјСЏ С„Р°Р№Р»Р° */
 	strOutputFile += p_soOutput.m_strTitle;
 
-	/* завершаем формирование командной строки */
+	/* Р·Р°РІРµСЂС€Р°РµРј С„РѕСЂРјРёСЂРѕРІР°РЅРёРµ РєРѕРјР°РЅРґРЅРѕР№ СЃС‚СЂРѕРєРё */
 	strCmdLine += " -p \"";
 	strCmdLine += strZipFile;
 	strCmdLine += '"';
@@ -482,7 +482,7 @@ int ExtractZipFile(SFileInfo &p_soUnZip, SFileInfo &p_soZipFile, SFileInfo &p_so
 	strCmdLine += strOutputFile;
 	strCmdLine += '"';
 
-	/* выполняем операцию */
+	/* РІС‹РїРѕР»РЅСЏРµРј РѕРїРµСЂР°С†РёСЋ */
 	iRetVal = system(strCmdLine.c_str());
 
 	return iRetVal;
@@ -496,7 +496,7 @@ int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog)
 	FILE *psoFile = NULL;
 
 	do {
-		/* инициализация дескриптора */
+		/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РґРµСЃРєСЂРёРїС‚РѕСЂР° */
 		pCurl = curl_easy_init();
 		if (NULL == pCurl) {
 			iRetVal = CURLE_OUT_OF_MEMORY;
@@ -555,7 +555,7 @@ int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog)
 			break;
 		}
 
-		/* если задан proxy host */
+		/* РµСЃР»Рё Р·Р°РґР°РЅ proxy host */
 		if (p_soConf.m_strProxyHost.length()) {
 			iFnRes = curl_easy_setopt(pCurl, CURLOPT_PROXY, p_soConf.m_strProxyHost.c_str());
 			if (CURLE_OK != iFnRes) {
@@ -565,7 +565,7 @@ int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog)
 			}
 		}
 
-		/* если задан proxy port */
+		/* РµСЃР»Рё Р·Р°РґР°РЅ proxy port */
 		if (p_soConf.m_strProxyPort.length()) {
 			long lPort = atol(p_soConf.m_strProxyPort.c_str());
 			iFnRes = curl_easy_setopt(pCurl, CURLOPT_PROXYPORT, lPort);
@@ -585,7 +585,7 @@ int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog)
 		}
 	} while (0);
 
-	/* освобождаем занятые ресурсы */
+	/* РѕСЃРІРѕР±РѕР¶РґР°РµРј Р·Р°РЅСЏС‚С‹Рµ СЂРµСЃСѓСЂСЃС‹ */
 	if (NULL != pCurl) {
 		curl_easy_cleanup(pCurl);
 	}
@@ -597,7 +597,7 @@ int LoadFileList (SResolverConf &p_soConf, std::string &p_strDir, CLog &p_coLog)
 }
 
 /******************************************************************************
-Образец строки, содержащей информацию о элементе удаленной файловой системы
+РћР±СЂР°Р·РµС† СЃС‚СЂРѕРєРё, СЃРѕРґРµСЂР¶Р°С‰РµР№ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ СЌР»РµРјРµРЅС‚Рµ СѓРґР°Р»РµРЅРЅРѕР№ С„Р°Р№Р»РѕРІРѕР№ СЃРёСЃС‚РµРјС‹
 drwxr-x---   6 hpiumusr   iumusers        96 Nov  1 00:00 2013
 ******************************************************************************/
 static const char g_mcFormat[] = "%s %u %s %s %u %s %u %u:%u %s";
@@ -624,7 +624,7 @@ int ParseFileList(SResolverConf &p_soConf, std::set<std::string> &p_setFileList)
 		char mcBuf[1024];
 		SFTPFileInfo soInfo;
 
-		/* формируем имя файла, содержащего список файлов */
+		/* С„РѕСЂРјРёСЂСѓРµРј РёРјСЏ С„Р°Р№Р»Р°, СЃРѕРґРµСЂР¶Р°С‰РµРіРѕ СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ */
 		if (p_soConf.m_strLocalDir.length()) {
 			strFileName = p_soConf.m_strLocalDir;
 			if (strFileName[strFileName.length() - 1] != '/') {
@@ -632,13 +632,13 @@ int ParseFileList(SResolverConf &p_soConf, std::set<std::string> &p_setFileList)
 			}
 		}
 		strFileName += p_soConf.m_strLocalFileList;
-		/* открываем файл, содержащий список файлов, на чтение */
+		/* РѕС‚РєСЂС‹РІР°РµРј С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ СЃРїРёСЃРѕРє С„Р°Р№Р»РѕРІ, РЅР° С‡С‚РµРЅРёРµ */
 		psoFile = fopen(strFileName.c_str(), "r");
 		if (NULL == psoFile) {
 			iRetVal = errno;
 			break;
 		}
-		/* читаем файл построчно */
+		/* С‡РёС‚Р°РµРј С„Р°Р№Р» РїРѕСЃС‚СЂРѕС‡РЅРѕ */
 		while (fgets(mcBuf, sizeof(mcBuf), psoFile)) {
 			iFnRes = sscanf(
 				mcBuf,
@@ -657,9 +657,9 @@ int ParseFileList(SResolverConf &p_soConf, std::set<std::string> &p_setFileList)
 				continue;
 			}
 			switch (soInfo.m_mcMode[0]) {
-			case 'd': /* если файл является директорией */
+			case 'd': /* РµСЃР»Рё С„Р°Р№Р» СЏРІР»СЏРµС‚СЃСЏ РґРёСЂРµРєС‚РѕСЂРёРµР№ */
 				break;
-			default: /* во всех остальных случаях */
+			default: /* РІРѕ РІСЃРµС… РѕСЃС‚Р°Р»СЊРЅС‹С… СЃР»СѓС‡Р°СЏС… */
 				p_setFileList.insert(soInfo.m_mcFileName);
 				break;
 			}

@@ -13,19 +13,19 @@
 
 #define SEM_NAME "/mmsc-resolver.update.locer"
 
-/* процедура инициализации объектов синхронизации openSSL */
+/* РїСЂРѕС†РµРґСѓСЂР° РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РѕР±СЉРµРєС‚РѕРІ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё openSSL */
 void init_locks (void);
-/* процедура освобождения ресурсов объектов синхронизации openSSL */
+/* РїСЂРѕС†РµРґСѓСЂР° РѕСЃРІРѕР±РѕР¶РґРµРЅРёСЏ СЂРµСЃСѓСЂСЃРѕРІ РѕР±СЉРµРєС‚РѕРІ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё openSSL */
 void kill_locks (void);
 
-/* информация о файле */
+/* РёРЅС„РѕСЂРјР°С†РёСЏ Рѕ С„Р°Р№Р»Рµ */
 struct SFileInfo {
 	std::string m_strTitle; 
 	std::string m_strDir;
 	size_t m_stFileSize;
 };
 
-/* структура для хранения конфигурации модуля */
+/* СЃС‚СЂСѓРєС‚СѓСЂР° РґР»СЏ С…СЂР°РЅРµРЅРёСЏ РєРѕРЅС„РёРіСѓСЂР°С†РёРё РјРѕРґСѓР»СЏ */
 struct SResolverConf {
 	std::string m_strHost;
 	std::string m_strUserName;
@@ -40,48 +40,48 @@ struct SResolverConf {
 	std::string m_strLogFileMask;
 	std::string m_strProxyHost;
 	std::string m_strProxyPort;
-	/* период обновления кэша в секундах. по умолчанию 3600 */
+	/* РїРµСЂРёРѕРґ РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° РІ СЃРµРєСѓРЅРґР°С…. РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ 3600 */
 	unsigned int m_uiUpdateInterval;
 };
 
-/* структура для хранения данных модуля */
+/* СЃС‚СЂСѓРєС‚СѓСЂР° РґР»СЏ С…СЂР°РЅРµРЅРёСЏ РґР°РЅРЅС‹С… РјРѕРґСѓР»СЏ */
 struct SResolverData {
-	/* кэш */
+	/* РєСЌС€ */
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > *m_pmapResolverCache;
-	/* логгер */
+	/* Р»РѕРіРіРµСЂ */
 	CLog m_coLog;
-	/* конфигурация модуля */
+	/* РєРѕРЅС„РёРіСѓСЂР°С†РёСЏ РјРѕРґСѓР»СЏ */
 	SResolverConf m_soConf;
-	/* объект семафора для доступа к файлам numlex */
+	/* РѕР±СЉРµРєС‚ СЃРµРјР°С„РѕСЂР° РґР»СЏ РґРѕСЃС‚СѓРїР° Рє С„Р°Р№Р»Р°Рј numlex */
 	sem_t *m_ptNumlexSem;
-	/* объект семафора для доступа к кэшу */
+	/* РѕР±СЉРµРєС‚ СЃРµРјР°С„РѕСЂР° РґР»СЏ РґРѕСЃС‚СѓРїР° Рє РєСЌС€Сѓ */
 	sem_t m_tCacheSem;
-	/* идентификатор потока обновления кэша */
+	/* РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р° */
 	pthread_t m_tThreadUpdateCache;
-	/* дескриптор семафора потока обновления кэша, выполняющего роль таймера */
+	/* РґРµСЃРєСЂРёРїС‚РѕСЂ СЃРµРјР°С„РѕСЂР° РїРѕС‚РѕРєР° РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р°, РІС‹РїРѕР»РЅСЏСЋС‰РµРіРѕ СЂРѕР»СЊ С‚Р°Р№РјРµСЂР° */
 	sem_t m_tThreadSem;
 	volatile int m_iContinueUpdate;
 };
 
-/* разбирает файл, содержащий план нумерации */
+/* СЂР°Р·Р±РёСЂР°РµС‚ С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 int ParseNumberinPlanFile (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
-/* разбирает файл, содержащий план нумерации */
+/* СЂР°Р·Р±РёСЂР°РµС‚ С„Р°Р№Р», СЃРѕРґРµСЂР¶Р°С‰РёР№ РїР»Р°РЅ РЅСѓРјРµСЂР°С†РёРё */
 int ParsePortFile (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
-/* считывает из файла данные и помещает их в кэш */
+/* СЃС‡РёС‚С‹РІР°РµС‚ РёР· С„Р°Р№Р»Р° РґР°РЅРЅС‹Рµ Рё РїРѕРјРµС‰Р°РµС‚ РёС… РІ РєСЌС€ */
 int resolver_cache (
 	SResolverData *p_psoResData,
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_mapCache);
-/* обновляет кэш */
+/* РѕР±РЅРѕРІР»СЏРµС‚ РєСЌС€ */
 int resolver_recreate_cache (SResolverData *p_psoResData);
-/* считывает данные из файла конфигурации модуля */
+/* СЃС‡РёС‚С‹РІР°РµС‚ РґР°РЅРЅС‹Рµ РёР· С„Р°Р№Р»Р° РєРѕРЅС„РёРіСѓСЂР°С†РёРё РјРѕРґСѓР»СЏ */
 int resolver_apply_settings (
 	const char *p_pszSettings,
 	SResolverConf &p_soResConf);
-/* добавляет диапазон в кэш */
+/* РґРѕР±Р°РІР»СЏРµС‚ РґРёР°РїР°Р·РѕРЅ РІ РєСЌС€ */
 int InsertRange (
 	std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > > &p_pmapCache,
 	const char *p_pszFrom,

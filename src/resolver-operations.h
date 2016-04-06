@@ -14,14 +14,14 @@ struct SOwnerData {
 extern "C" {
 #endif
 
-/* инициализация резольвера */
+/* РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЂРµР·РѕР»СЊРІРµСЂР° */
 void * resolver_init (const char *p_pszConfFile);
 
-/* деинициализация резольвера */
+/* РґРµРёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ СЂРµР·РѕР»СЊРІРµСЂР° */
 int resolver_fini (void *p_pPtr);
 
-/* поиск номера телефона в кэше */
-struct SOwnerData * resolver_resolve (
+/* РїРѕРёСЃРє РЅРѕРјРµСЂР° С‚РµР»РµС„РѕРЅР° РІ РєСЌС€Рµ */
+const char * resolver_resolve (
 	const char *p_pszPhoneNum,
 	const void *p_pModuleData);
 
