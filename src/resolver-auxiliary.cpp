@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <string>
 #ifdef _WIN32
 #	include <curl.h>
 #	include <io.h>
@@ -22,6 +23,9 @@
 
 static pthread_mutex_t *g_lockarray = NULL;
 static int g_iLockInitialized = 0;
+
+static const char * g_pszRedir = "mREDIRECT";
+
 /* процедура блокировки дл openSSL */
 static void lock_callback (int mode, int type, const char *file, int line)
 {
@@ -452,6 +456,15 @@ int resolver_apply_settings (
 		iFnRes = coConf.GetParamValue(pszParamName, strParamVal);
 		if (!iFnRes)
 			p_soResConf.m_strProxyPort = strParamVal;
+    /* параметр main_service */
+    pszParamName = "main_service";
+    iFnRes = coConf.GetParamValue( pszParamName, strParamVal );
+    if ( !iFnRes ) {
+      p_soResConf.m_strMainService = strParamVal;
+    } else {
+      p_soResConf.m_strMainService = "/usr/local/bin/mmsc";
+    }
+
 	} while (0);
 
 	/* проверяем, все ли нужные параметры мы получили */
@@ -460,6 +473,119 @@ int resolver_apply_settings (
 	}
 
 	return iRetVal;
+}
+
+bool mmsc_resolver_is_main_service( SResolverData *p_psoModuleData )
+{
+  int iRetVal = 0;
+  pid_t tPId;
+  std::string str;
+  char mcPath[ PATH_MAX ];
+  size_t tLen;
+
+  tPId = getpid();
+
+  str = "/proc/" + std::to_string( static_cast<long long unsigned> ( tPId ) );
+  str += "/exe";
+
+  tLen = readlink( str.c_str(), mcPath, PATH_MAX );
+  if ( static_cast<size_t>( -1 ) != tLen && tLen < PATH_MAX ) {
+    mcPath[ tLen ] = '\0';
+    UTL_LOG_D( p_psoModuleData->m_coLog, "module is started from: %s; master path is: %s", mcPath, p_psoModuleData->m_soConf.m_strMainService.c_str() );
+  } else {
+    mcPath[ 0 ] = '\0';
+    UTL_LOG_D( p_psoModuleData->m_coLog, "error occurred: code: %d; descr: %s\n", errno, strerror( errno ) );
+  }
+
+  return ( 0 == strcmp( mcPath, p_psoModuleData->m_soConf.m_strMainService.c_str() ) );
+}
+
+const char * mmsc_resolver_resolve( SResolverData *p_psoResolvData, const char *p_pszPhoneNum )
+{
+  SOwnerData * psoRetVal = NULL;
+
+  do {
+    /* Президент - Прямая линия */
+    if ( 0 == strcmp( p_pszPhoneNum, "04040" ) ) {
+      return g_pszRedir;
+    }
+
+    unsigned int uiABC;
+    unsigned int uiDEF;
+    unsigned int uiGHIJ;
+    char mcTmp[ 5 ];
+    char *pszEndPtr;
+
+    /* получаем ABC */
+    memcpy( mcTmp, &( p_pszPhoneNum[ 2 ] ), 3 );
+    mcTmp[ 3 ] = '\0';
+    uiABC = strtoul( mcTmp, &pszEndPtr, 10 );
+    if ( &( mcTmp[ 3 ] ) != pszEndPtr ) {
+      break;
+    }
+
+    /* получаем DEF */
+    memcpy( mcTmp, &( p_pszPhoneNum[ 5 ] ), 3 );
+    mcTmp[ 3 ] = '\0';
+    uiDEF = strtoul( mcTmp, &pszEndPtr, 10 );
+    if ( &( mcTmp[ 3 ] ) != pszEndPtr ) {
+      break;
+    }
+
+    /* получаем GHIJ */
+    memcpy( mcTmp, &( p_pszPhoneNum[ 8 ] ), 4 );
+    mcTmp[ 4 ] = '\0';
+    uiGHIJ = strtoul( mcTmp, &pszEndPtr, 10 );
+    if ( &( mcTmp[ 4 ] ) != pszEndPtr ) {
+      break;
+    }
+
+    std::map<unsigned int, std::map<unsigned int, std::multiset<SOwnerData> > >::iterator iterMapABC;
+
+    /* ожидание освобождения семафора доступа к кэшу */
+    if ( sem_wait( &p_psoResolvData->m_tCacheSem ) ) {
+      break;
+    }
+
+    do {
+      /* ищем ABC */
+      iterMapABC = p_psoResolvData->m_pmapResolverCache->find( uiABC );
+      if ( iterMapABC == p_psoResolvData->m_pmapResolverCache->end() ) {
+        break;
+      }
+
+      std::map<unsigned int, std::multiset<SOwnerData> >::iterator iterMapDEF;
+      std::multiset<SOwnerData>::iterator iterResData;
+
+      /* ищем DEF */
+      iterMapDEF = iterMapABC->second.find( uiDEF );
+      if ( iterMapDEF == iterMapABC->second.end() ) {
+        break;;
+      }
+
+      /* ищем GHIJ */
+      iterResData = iterMapDEF->second.begin();
+      for ( ; iterResData != iterMapDEF->second.end(); ++iterResData ) {
+        if ( uiGHIJ >= iterResData->m_uiFromGHIJ && uiGHIJ <= iterResData->m_uiToGHIJ ) {
+          psoRetVal = ( struct SOwnerData * ) &( *iterResData );
+          break;
+        }
+      }
+    } while ( 0 );
+
+    /* освобождение семафора доступа к кэшу */
+    if ( sem_post( &p_psoResolvData->m_tCacheSem ) ) {
+      break;
+    }
+  } while ( 0 );
+
+  if ( psoRetVal ) {
+    p_psoResolvData->m_coLog.WriteLog( "'%s': owner: '%s'; region: '%u'; MNC: '%u';", p_pszPhoneNum, psoRetVal->m_mcOwner, psoRetVal->m_uiRegionCode, psoRetVal->m_uiMNC );
+  } else {
+    p_psoResolvData->m_coLog.WriteLog( "'%s;: owner not found", p_pszPhoneNum );
+  }
+
+  return ( psoRetVal ? psoRetVal->m_mcOwner : NULL );
 }
 
 int InsertRange (

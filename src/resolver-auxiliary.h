@@ -40,8 +40,11 @@ struct SResolverConf {
 	std::string m_strLogFileMask;
 	std::string m_strProxyHost;
 	std::string m_strProxyPort;
-	/* период обновления кэша в секундах. по умолчанию 3600 */
+  std::string m_strMainService;
+  /* период обновления кэша в секундах. по умолчанию 3600 */
 	unsigned int m_uiUpdateInterval;
+  /* является ли этот экзэмпляр приложения основным сервисом */
+  bool        m_bIsMainService;
 };
 
 /* структура для хранения данных модуля */
@@ -94,5 +97,9 @@ int InsertRangeDEF (
 	unsigned int p_uiToDEF,
 	unsigned int p_uiToGHIJ,
 	SOwnerData &p_soResData);
+
+bool mmsc_resolver_is_main_service( SResolverData *p_psoModuleData );
+
+const char * mmsc_resolver_resolve( SResolverData *p_psoResolvData, const char *p_pszPhoneNum );
 
 #endif /* _RESOLVER_AUXILIARY_H_ */

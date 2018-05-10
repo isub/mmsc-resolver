@@ -14,19 +14,24 @@ numlex-downloader: ./obj/numlex-downloader.o ./obj/resolver-auxiliary.o ./obj/co
 ./obj/numlex-downloader.o: main.cpp
 	g++ -c main.cpp -o ./obj/numlex-downloader.o $(MBUNI_H) $(MBUNI_UTL_H) $(KANNEL_H) $(LIBXML_H) $(UTL_H)
 
-mmsc-resolver: ./obj/mmsc-resolver.o ./obj/resolver-operations.o ./obj/config.o ./obj/log.o ./obj/resolver-auxiliary.o
-	gcc -shared -o ../libmmsc-resolver.so $(KANNEL_LIB_DIR) $(KANNEL_LIB) ./obj/mmsc-resolver.o ./obj/resolver-operations.o ./obj/resolver-auxiliary.o ./obj/config.o ./obj/log.o -lcurl -lmms -lstdc++
+mmsc-resolver: ./obj/mmsc-resolver.o ./obj/resolver-operations.o ./obj/config.o ./obj/log.o ./obj/resolver-auxiliary.o ./obj/ipconn.o ./obj/iplsnr.o
+	gcc -shared -o ../libmmsc-resolver.so $(KANNEL_LIB_DIR) $(KANNEL_LIB) ./obj/mmsc-resolver.o ./obj/resolver-operations.o ./obj/resolver-auxiliary.o ./obj/config.o ./obj/log.o ./obj/ipconn.o ./obj/iplsnr.o -lcurl -lmms -lstdc++
+
 ./obj/mmsc-resolver.o: mmsc-resolver.c ./obj/resolver-operations.o
 	gcc -fPIC -c mmsc-resolver.c -o ./obj/mmsc-resolver.o $(MBUNI_H) $(MBUNI_UTL_H) $(KANNEL_H) $(LIBXML_H)
 
 ./obj/resolver-operations.o: resolver-operations.cpp
 	g++ -fPIC -c resolver-operations.cpp $(UTL_H) -o ./obj/resolver-operations.o
 ./obj/resolver-auxiliary.o: resolver-auxiliary.cpp
-	g++ -fPIC -c resolver-auxiliary.cpp $(UTL_H) -o ./obj/resolver-auxiliary.o
+	g++ -fPIC -std=c++0x -c resolver-auxiliary.cpp $(UTL_H) -o ./obj/resolver-auxiliary.o
 ./obj/config.o: $(UTL_DIR)/config/config.cpp
 	g++ -fPIC -c $(UTL_DIR)/config/config.cpp -o ./obj/config.o
 ./obj/log.o: $(UTL_DIR)/log/log.cpp
 	g++ -fPIC -c $(UTL_DIR)/log/log.cpp -o ./obj/log.o
+./obj/ipconn.o: $(UTL_DIR)/ipconnector/ipconnector.cpp
+	g++ -fPIC -c $(UTL_DIR)/ipconnector/ipconnector.cpp -o ./obj/ipconn.o
+./obj/iplsnr.o: $(UTL_DIR)/tcp_listener/tcp_listener.c
+	g++ -fPIC -c $(UTL_DIR)/tcp_listener/tcp_listener.c -o ./obj/iplsnr.o
 
 install: install-numlex-downloader install-mmsc-resolver
 

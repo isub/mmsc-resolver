@@ -1,5 +1,7 @@
 #include "resolver-operations.h"
 #include "resolver-auxiliary.h"
+#include "utils/ipconnector/ipconnector.h"
+#include "utils/tcp_listener/tcp_listener.h"
 
 #include <errno.h>
 #include <string.h>
@@ -18,8 +20,12 @@
 
 /* процедура потока обновления кэша */
 static void * resolver_update_cache (void *p_pParam);
-static const char * g_pszRedir = "mREDIRECT";
-static const char * g_pszMailRu = "mMAILRU";
+
+static struct STCPListener *g_psoTCPLsnr;
+static int mmsc_resolver_tcp_cb( const struct SAcceptedSock *p_psoAcceptedSocket );
+
+static CLog *g_pcoLog;
+static SResolverData *g_psoResolvData;
 
 void * resolver_init (const char *p_pszConfFile)
 {
@@ -40,7 +46,7 @@ void * resolver_init (const char *p_pszConfFile)
 		if (iFnRes) {
 			resolver_fini (psoResData);
 			psoResData = NULL;
-			break;
+      break;
 		}
 
 		/* инициализация лог-файла */
@@ -51,60 +57,85 @@ void * resolver_init (const char *p_pszConfFile)
 			break;
 		}
 
-		/* создаем семафор доступа к файлам numlex */
-		psoResData->m_ptNumlexSem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, 1);
-		/* если семафор уже создан открыаем его */
-		if (SEM_FAILED == psoResData->m_ptNumlexSem && EACCES == errno) {
-			psoResData->m_ptNumlexSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
-		}
-		if (SEM_FAILED == psoResData->m_ptNumlexSem) {
-			resolver_fini (psoResData);
-			psoResData = NULL;
-			break;
-		}
+    psoResData->m_soConf.m_bIsMainService = mmsc_resolver_is_main_service( psoResData );
+    if ( psoResData->m_soConf.m_bIsMainService ) {
+		  /* создаем семафор доступа к файлам numlex */
+		  psoResData->m_ptNumlexSem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, 1);
+		  /* если семафор уже создан открыаем его */
+		  if (SEM_FAILED == psoResData->m_ptNumlexSem && EACCES == errno) {
+			  psoResData->m_ptNumlexSem = sem_open (SEM_NAME, 0, S_IRWXU, 1);
+		  }
+		  if (SEM_FAILED == psoResData->m_ptNumlexSem) {
+			  resolver_fini (psoResData);
+			  psoResData = NULL;
+        UTL_LOG_E( psoResData->m_coLog, "error: %s:%u", __FUNCTION__, __LINE__ );
+			  break;
+		  }
 
-		/* инициализируем семафор для ожидания потока обновления кэша, создаем его запертым */
-		iFnRes = sem_init (&psoResData->m_tThreadSem, 0, 0);
-		if (iFnRes) {
-			resolver_fini (psoResData);
-			psoResData = NULL;
-			break;
-		}
+		  /* инициализируем семафор для ожидания потока обновления кэша, создаем его запертым */
+		  iFnRes = sem_init (&psoResData->m_tThreadSem, 0, 0);
+		  if (iFnRes) {
+			  resolver_fini (psoResData);
+			  psoResData = NULL;
+        UTL_LOG_E( psoResData->m_coLog, "error: %s:%u", __FUNCTION__, __LINE__ );
+        break;
+		  }
 
-		/* создаем семафор доступа к кэшу */
-		iFnRes = sem_init (&psoResData->m_tCacheSem, 0, 256);
-		if (iFnRes) {
-			resolver_fini (psoResData);
-			psoResData = NULL;
-			break;
-		}
+		  /* создаем семафор доступа к кэшу */
+		  iFnRes = sem_init (&psoResData->m_tCacheSem, 0, 256);
+		  if (iFnRes) {
+			  resolver_fini (psoResData);
+			  psoResData = NULL;
+        UTL_LOG_E( psoResData->m_coLog, "error: %s:%u", __FUNCTION__, __LINE__ );
+        break;
+		  }
 
-		/* первоначальная загрузка данных */
-		/* выделяем память под кэш */
-		psoResData->m_pmapResolverCache = new std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >;
-		/* формируем кэш */
-		iFnRes = resolver_cache (psoResData, *(psoResData->m_pmapResolverCache));
-		if (iFnRes) {
-			resolver_fini (psoResData);
-			psoResData = NULL;
-			break;
-		}
+		  /* первоначальная загрузка данных */
+		  /* выделяем память под кэш */
+		  psoResData->m_pmapResolverCache = new std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >;
+		  /* формируем кэш */
+		  iFnRes = resolver_cache (psoResData, *(psoResData->m_pmapResolverCache));
+		  if (iFnRes) {
+			  resolver_fini (psoResData);
+			  psoResData = NULL;
+        UTL_LOG_E( psoResData->m_coLog, "error: %s:%u", __FUNCTION__, __LINE__ );
+        break;
+		  }
 
-		/* запуск потока обновления кэша */
-		iFnRes = pthread_create (
-			&(psoResData->m_tThreadUpdateCache),
-			NULL,
-			resolver_update_cache,
-			psoResData);
-		if (iFnRes) {
-			resolver_fini (psoResData);
-			psoResData = NULL;
-			break;
-		} 
+		  /* запуск потока обновления кэша */
+		  iFnRes = pthread_create (
+			  &(psoResData->m_tThreadUpdateCache),
+			  NULL,
+			  resolver_update_cache,
+			  psoResData);
+		  if (iFnRes) {
+			  resolver_fini (psoResData);
+			  psoResData = NULL;
+        UTL_LOG_E( psoResData->m_coLog, "error: %s:%u", __FUNCTION__, __LINE__ );
+        break;
+		  }
+     /* сервис работает в качестве главного сервиса - сервера */
+      int iErrLine;
+      g_psoTCPLsnr = tcp_listener_init( "127.0.0.1", 9999, 32, 32, mmsc_resolver_tcp_cb, &iErrLine );
+      if ( NULL != g_psoTCPLsnr ) {
+      } else {
+        UTL_LOG_E( psoResData->m_coLog, "can not initialize tcp_listener: error in line: %d", iErrLine );
+        psoResData = NULL;
+        break;
+      }
+    } else {
+      /* сервис работает в качестве клиента */
+    }
+
+    g_pcoLog = &psoResData->m_coLog;
+    g_psoResolvData = psoResData;
 	} while (0);
 
 	if (psoResData) {
-		psoResData->m_coLog.WriteLog ("%s: mms resovler module is initialized successfully", __FUNCTION__);
+    psoResData->m_coLog.WriteLog(
+      "%s: mms resovler module is initialized successfully as %s",
+      __FUNCTION__,
+      psoResData->m_soConf.m_bIsMainService ? "server" : "client" );
 	}
 
 	return psoResData;
@@ -169,96 +200,48 @@ const char * resolver_resolve (
 	const char *p_pszPhoneNum,
 	const void *p_pModuleData)
 {
-	SOwnerData * psoRetVal = NULL;
-	SResolverData *psoResData = (SResolverData *) p_pModuleData;
+  const char *pszRetVal;
+  SOwnerData * psoRetVal = NULL;
+  SResolverData *psoResData = ( SResolverData * )p_pModuleData;
+  static char mcResult[ 32 ];
 
-	do {
-		if (10 > strlen (p_pszPhoneNum)) {
-      if (0 == strcmp(p_pszPhoneNum, "04040")) {
-        return g_pszRedir;
-      } else if(0 == strcmp(p_pszPhoneNum, "40404")) {
-        return g_pszMailRu;
+  if ( NULL != psoResData ) {
+  } else {
+    return NULL;
+  }
+
+  if ( psoResData->m_soConf.m_bIsMainService ) {
+    pszRetVal = mmsc_resolver_resolve( psoResData, p_pszPhoneNum );
+  } else {
+    CIPConnector coIPConn( 10 );
+    int iFnRes;
+
+    if ( 0 == coIPConn.Connect( "127.0.0.1", 9999, IPPROTO_TCP ) ) {
+    } else {
+      return NULL;
+    }
+    iFnRes = coIPConn.Send( p_pszPhoneNum, strlen( p_pszPhoneNum ) );
+    if ( 0 == iFnRes ) {
+    } else {
+      coIPConn.DisConnect();
+      return NULL;
+    }
+    iFnRes = coIPConn.Recv( mcResult, sizeof( mcResult ) );
+    if ( 0 < iFnRes ) {
+      if ( iFnRes < sizeof( mcResult ) - 1 ) {
+        mcResult[ iFnRes ] = '\0';
+        pszRetVal = mcResult;
       } else {
-        break;
+        return NULL;
       }
-		}
+    } else {
+      coIPConn.DisConnect();
+      return NULL;
+    }
+    coIPConn.DisConnect();
+  }
 
-		unsigned int uiABC;
-		unsigned int uiDEF;
-		unsigned int uiGHIJ;
-		char mcTmp[5];
-		char *pszEndPtr;
-
-		/* получаем ABC */
-		memcpy (mcTmp, &(p_pszPhoneNum[2]), 3);
-		mcTmp[3] = '\0';
-		uiABC = strtoul (mcTmp, &pszEndPtr, 10);
-		if (&(mcTmp[3]) != pszEndPtr) {
-			break;
-		}
-
-		/* получаем DEF */
-		memcpy (mcTmp, &(p_pszPhoneNum[5]), 3);
-		mcTmp[3] = '\0';
-		uiDEF = strtoul (mcTmp, &pszEndPtr, 10);
-		if (&(mcTmp[3]) != pszEndPtr) {
-			break;
-		}
-
-		/* получаем GHIJ */
-		memcpy (mcTmp, &(p_pszPhoneNum[8]), 4);
-		mcTmp[4] = '\0';
-		uiGHIJ = strtoul (mcTmp, &pszEndPtr, 10);
-		if (&(mcTmp[4]) != pszEndPtr) {
-			break;
-		}
-
-		std::map<unsigned int,std::map<unsigned int,std::multiset<SOwnerData> > >::iterator iterMapABC;
-
-		/* ожидание освобождения семафора доступа к кэшу */
-		if (sem_wait (&psoResData->m_tCacheSem)) {
-			break;
-		}
-
-		do {
-			/* ищем ABC */
-			iterMapABC = psoResData->m_pmapResolverCache->find (uiABC);
-			if (iterMapABC == psoResData->m_pmapResolverCache->end ()) {
-				break;
-			}
-
-			std::map<unsigned int,std::multiset<SOwnerData> >::iterator iterMapDEF;
-			std::multiset<SOwnerData>::iterator iterResData;
-
-			/* ищем DEF */
-			iterMapDEF = iterMapABC->second.find (uiDEF);
-			if (iterMapDEF == iterMapABC->second.end ()) {
-				break;;
-			}
-
-			/* ищем GHIJ */
-			iterResData = iterMapDEF->second.begin ();
-			for (; iterResData != iterMapDEF->second.end (); ++iterResData) {
-				if (uiGHIJ >= iterResData->m_uiFromGHIJ && uiGHIJ <= iterResData->m_uiToGHIJ) {
-					psoRetVal = (struct SOwnerData *) &(*iterResData);
-					break;
-				}
-			}
-		} while (0);
-
-		/* освобождение семафора доступа к кэшу */
-		if (sem_post (&psoResData->m_tCacheSem)) {
-			break;
-		}
-	} while (0);
-
-	if (psoRetVal) {
-		psoResData->m_coLog.WriteLog ("'%s': owner: '%s'; region: '%u'; MNC: '%u';", p_pszPhoneNum, psoRetVal->m_mcOwner, psoRetVal->m_uiRegionCode, psoRetVal->m_uiMNC);
-	} else {
-		psoResData->m_coLog.WriteLog ("'%s;: owner not found", p_pszPhoneNum);
-	}
-
-	return (psoRetVal ? psoRetVal->m_mcOwner : NULL);
+	return pszRetVal;
 }
 
 static void * resolver_update_cache (void *p_pParam)
@@ -351,4 +334,49 @@ static void * resolver_update_cache (void *p_pParam)
 	} while (0);
 
 	pthread_exit (0);
+}
+
+static int mmsc_resolver_tcp_cb( const struct SAcceptedSock *p_psoAcceptedSocket )
+{
+  int iRetVal = 0;
+  int iFnRes;
+  char mcData[ 32 ];
+  const char *pszResult;
+
+  if ( NULL != g_pcoLog ) {
+    g_pcoLog->WriteLog( "connection is accepted (%s:%hu)", p_psoAcceptedSocket->m_mcIPAddress, p_psoAcceptedSocket->m_usPort );
+  }
+
+  iFnRes = recv( p_psoAcceptedSocket->m_iAcceptedSock, mcData, sizeof( mcData ), 0 );
+  if ( 0 < iFnRes ) {
+    if ( iFnRes < sizeof( mcData ) - 1 ) {
+      mcData[ iFnRes ] = '\0';
+    } else {
+      mcData[ sizeof( mcData ) - 1 ] = '\0';
+    }
+  } else if ( 0 == iFnRes ) {
+    if ( NULL != g_pcoLog ) {
+      g_pcoLog->WriteLog( "connection is closed (%s:%hu)", p_psoAcceptedSocket->m_mcIPAddress, p_psoAcceptedSocket->m_usPort );
+      return iRetVal;
+    }
+  } else {
+    g_pcoLog->WriteLog( "connection error code %d (%s:%hu)", errno, p_psoAcceptedSocket->m_mcIPAddress, p_psoAcceptedSocket->m_usPort );
+    return iRetVal;
+  }
+  pszResult = mmsc_resolver_resolve( g_psoResolvData, mcData );
+  if ( NULL != pszResult ) {
+    iFnRes = send( p_psoAcceptedSocket->m_iAcceptedSock, pszResult, strlen( pszResult ) + 1, 0 );
+  } else {
+    iFnRes = send( p_psoAcceptedSocket->m_iAcceptedSock, "", 1, 0 );
+  }
+
+  if ( NULL != g_pcoLog ) {
+    if ( 0 < iFnRes ) {
+      g_pcoLog->WriteLog( "%d bytes is sent to %s:%hu", iFnRes, p_psoAcceptedSocket->m_mcIPAddress, p_psoAcceptedSocket->m_usPort );
+    } else {
+      g_pcoLog->WriteLog( "connection error code %d (%s:%hu)", errno, p_psoAcceptedSocket->m_mcIPAddress, p_psoAcceptedSocket->m_usPort );
+    }
+  }
+
+  return iRetVal;
 }
